@@ -11,6 +11,7 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AddTaskSheet } from "@/components/add-task-sheet";
+import { Reminders } from "@/components/reminders";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_CATEGORIES, categoryIcon, istToday, occursOn, isCheckedOn,
@@ -206,6 +207,7 @@ export default function TaskBoard({
 
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           <div className="mx-auto w-full max-w-2xl">
+            <Reminders tasks={tasks} />
             {view === "today" ? (
               <TodayView overdue={overdue} todo={todo} doneToday={doneToday}
                 today={today} onToggle={toggleTask} onDelete={deleteTask} onAdd={() => setAddOpen(true)} />
