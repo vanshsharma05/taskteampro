@@ -30,7 +30,7 @@ const dueFmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short"
 const timeFmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
 const stampFmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-export function istDateStr(d: Date): string {
+function istDateStr(d: Date): string {
   return dateFmt.format(d); // "YYYY-MM-DD"
 }
 export function isRepeating(t: ScoringTask): boolean {
@@ -49,7 +49,7 @@ function todayDeadlineInstant(t: ScoringTask, now: Date): Date {
   return new Date(`${istDateStr(now)}T${t.due_time}${TZ_OFFSET}`);
 }
 
-export function isDueToday(t: ScoringTask, now: Date): boolean {
+function isDueToday(t: ScoringTask, now: Date): boolean {
   const today = istDateStr(now);
   if (!isRepeating(t)) return t.due_date === today;
   switch (t.recurrence) {
@@ -66,7 +66,7 @@ export function isDueToday(t: ScoringTask, now: Date): boolean {
   }
 }
 
-export function doneToday(t: ScoringTask, now: Date): boolean {
+function doneToday(t: ScoringTask, now: Date): boolean {
   return !!t.completed_at && istDateStr(new Date(t.completed_at)) === istDateStr(now);
 }
 
