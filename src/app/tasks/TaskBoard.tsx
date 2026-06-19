@@ -23,7 +23,7 @@ type View = "today" | "upcoming";
 type Incoming = Partial<PersonalTask> & { id: string; title: string };
 
 const COLUMNS_SELECT =
-  "id, title, description, category, importance, due_date, due_time, recurrence, repeat_days, repeat_dom, is_done, last_done_on, completed_at";
+  "id, title, description, category, importance, due_date, due_time, recurrence, repeat_days, repeat_dom, repeat_every_min, window_start, window_end, is_done, last_done_on, completed_at";
 
 function istDateOf(ts: string): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -42,6 +42,9 @@ function normalize(t: Incoming): PersonalTask {
     recurrence: t.recurrence ?? null,
     repeat_days: t.repeat_days ?? null,
     repeat_dom: t.repeat_dom ?? null,
+    repeat_every_min: t.repeat_every_min ?? null,
+    window_start: t.window_start ?? null,
+    window_end: t.window_end ?? null,
     is_done: t.is_done ?? false,
     last_done_on: t.last_done_on ?? null,
     completed_at: t.completed_at ?? null,

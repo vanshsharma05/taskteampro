@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, X } from "lucide-react";
 import { istToday, occursOn, isCheckedOn, formatTime, type PersonalTask } from "@/lib/personal";
 
-// current time in IST as "HH:MM" (24h), midnight-safe
 function istHHMM(): string {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false,
@@ -13,6 +12,7 @@ function istHHMM(): string {
   const m = parts.find((p) => p.type === "minute")?.value ?? "00";
   return `${h === "24" ? "00" : h}:${m}`;
 }
+const toMin = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
 
 function initialPermission(): NotificationPermission | "unsupported" {
   if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
@@ -29,31 +29,43 @@ export function Reminders({ tasks }: { tasks: PersonalTask[] }) {
     tasksRef.current = tasks;
   }, [tasks]);
 
-  // scheduler — runs while the app is open
   useEffect(() => {
     if (perm !== "granted") return;
     const tick = () => {
       const today = istToday();
       const now = istHHMM();
-      for (const t of tasksRef.current) {
-        if (!t.due_time) continue;
-        if (t.due_time.slice(0, 5) !== now) continue;
-        if (!occursOn(t, today)) continue;
-        if (isCheckedOn(t, today)) continue;
+      const nowMin = toMin(now);
+
+      const fire = (t: PersonalTask, sub: string) => {
         const key = `${t.id}:${today}:${now}`;
-        if (firedRef.current.has(key)) continue;
+        if (firedRef.current.has(key)) return;
         firedRef.current.add(key);
         try {
           const n = new Notification(t.title, {
-            body: `Reminder · ${formatTime(t.due_time)}${t.category ? ` · ${t.category}` : ""}`,
-            tag: key,
+            body: `Reminder · ${sub}${t.category ? ` · ${t.category}` : ""}`, tag: key,
           });
           n.onclick = () => { window.focus(); n.close(); };
         } catch { /* ignore */ }
+      };
+
+      for (const t of tasksRef.current) {
+        if (t.recurrence === "interval") {
+          if (!t.window_start || !t.window_end || !t.repeat_every_min) continue;
+          const ws = toMin(t.window_start), we = toMin(t.window_end);
+          if (nowMin < ws || nowMin > we) continue;
+          if ((nowMin - ws) % t.repeat_every_min !== 0) continue;
+          fire(t, "time for this");
+        } else {
+          if (!t.due_time) continue;
+          if (t.due_time.slice(0, 5) !== now) continue;
+          if (!occursOn(t, today)) continue;
+          if (isCheckedOn(t, today)) continue;
+          fire(t, formatTime(t.due_time));
+        }
       }
     };
     tick();
-    const id = window.setInterval(tick, 20000); // every 20s reliably catches each minute
+    const id = window.setInterval(tick, 20000);
     return () => window.clearInterval(id);
   }, [perm]);
 
@@ -62,7 +74,7 @@ export function Reminders({ tasks }: { tasks: PersonalTask[] }) {
     const res = await Notification.requestPermission();
     setPerm(res);
     if (res === "granted") {
-      try { new Notification("Reminders are on", { body: "We'll nudge you when a task is due." }); } catch { /* ignore */ }
+      try { new Notification("Reminders are on", { body: "We'll nudge you when something's due." }); } catch { /* ignore */ }
     }
   }
 
@@ -76,15 +88,12 @@ export function Reminders({ tasks }: { tasks: PersonalTask[] }) {
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">Turn on reminders</p>
         <p className="text-xs text-muted-foreground">
-          {perm === "denied"
-            ? "Reminders are blocked — enable notifications for this site in your browser settings."
-            : "Get a nudge when a task with a time is due."}
+          {perm === "denied" ? "Reminders are blocked — enable notifications for this site in your browser settings."
+            : "Get a nudge when a task is due, or on your repeating reminders."}
         </p>
       </div>
       {perm === "default" && (
-        <button onClick={enable} className="shrink-0 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:bg-foreground/90">
-          Turn on
-        </button>
+        <button onClick={enable} className="shrink-0 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:bg-foreground/90">Turn on</button>
       )}
       <button onClick={() => setDismissed(true)} aria-label="Dismiss" className="shrink-0 rounded-md p-1 text-muted-foreground/60 transition hover:text-foreground">
         <X className="size-4" />

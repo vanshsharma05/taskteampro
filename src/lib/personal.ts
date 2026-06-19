@@ -1,10 +1,8 @@
 import {
-  HeartPulse, Home, ShoppingBag, Wallet, Briefcase, User,
-  type LucideIcon,
+  HeartPulse, Home, ShoppingBag, Wallet, Briefcase, User, type LucideIcon,
 } from "lucide-react";
 
-/* ---------- Task shape (personal) ---------- */
-export type Recurrence = "daily" | "weekly" | "monthly" | null;
+export type Recurrence = "daily" | "weekly" | "monthly" | "interval" | null;
 
 export interface PersonalTask {
   id: string;
@@ -12,17 +10,19 @@ export interface PersonalTask {
   description: string | null;
   category: string | null;
   importance: "normal" | "high";
-  due_date: string | null;       // YYYY-MM-DD
-  due_time: string | null;       // HH:MM (24h) or HH:MM:SS
-  recurrence: Recurrence;        // null = one-time
-  repeat_days: number[] | null;  // weekly: 0=Sun … 6=Sat
-  repeat_dom: number | null;     // monthly: 1–31
-  is_done: boolean;              // one-time completion
-  last_done_on: string | null;   // recurring: date last completed (YYYY-MM-DD)
+  due_date: string | null;
+  due_time: string | null;
+  recurrence: Recurrence;
+  repeat_days: number[] | null;
+  repeat_dom: number | null;
+  repeat_every_min: number | null;  // interval: minutes between nudges
+  window_start: string | null;      // interval: "HH:MM"
+  window_end: string | null;        // interval: "HH:MM"
+  is_done: boolean;
+  last_done_on: string | null;
   completed_at: string | null;
 }
 
-/* ---------- Categories ---------- */
 export interface CategoryDef { name: string; Icon: LucideIcon; }
 
 export const DEFAULT_CATEGORIES: CategoryDef[] = [
@@ -35,28 +35,21 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
 ];
 
 export function categoryIcon(name: string | null): LucideIcon {
-  const found = DEFAULT_CATEGORIES.find(
-    (c) => c.name.toLowerCase() === (name ?? "").toLowerCase(),
-  );
+  const found = DEFAULT_CATEGORIES.find((c) => c.name.toLowerCase() === (name ?? "").toLowerCase());
   return found?.Icon ?? User;
 }
 
-/* ---------- IST date helpers (deterministic) ---------- */
-// Today's date in Asia/Kolkata as YYYY-MM-DD
 export function istToday(): string {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric", month: "2-digit", day: "2-digit",
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date());
 }
 
-// Day-of-week (0=Sun … 6=Sat) for a plain YYYY-MM-DD date
 export function dayOfWeek(dateStr: string): number {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
-// Add n days to a YYYY-MM-DD date → YYYY-MM-DD
 export function addDays(dateStr: string, n: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
@@ -64,32 +57,26 @@ export function addDays(dateStr: string, n: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
-/* ---------- Recurrence logic ---------- */
-// Does this task occur on the given calendar date?
 export function occursOn(task: PersonalTask, dateStr: string): boolean {
-  if (!task.recurrence) return task.due_date === dateStr;          // one-time
+  if (task.recurrence === "interval") return false;       // shown/managed separately
+  if (!task.recurrence) return task.due_date === dateStr;
   if (task.recurrence === "daily") return true;
-  if (task.recurrence === "weekly")
-    return (task.repeat_days ?? []).includes(dayOfWeek(dateStr));
+  if (task.recurrence === "weekly") return (task.repeat_days ?? []).includes(dayOfWeek(dateStr));
   if (task.recurrence === "monthly") {
-    const dom = task.repeat_dom ??
-      (task.due_date ? Number(task.due_date.split("-")[2]) : null);
+    const dom = task.repeat_dom ?? (task.due_date ? Number(task.due_date.split("-")[2]) : null);
     return dom != null && dom === Number(dateStr.split("-")[2]);
   }
   return false;
 }
 
-// Is this task ticked off for the given date?
 export function isCheckedOn(task: PersonalTask, dateStr: string): boolean {
   return task.recurrence ? task.last_done_on === dateStr : task.is_done;
 }
 
-// A one-time task past its due date and still not done
 export function isOverdue(task: PersonalTask, today: string): boolean {
   return !task.recurrence && !task.is_done && !!task.due_date && task.due_date < today;
 }
 
-/* ---------- Formatting ---------- */
 export function formatTime(t: string | null): string {
   if (!t) return "";
   const [hStr, mStr] = t.split(":");
@@ -111,6 +98,12 @@ export function formatDateLabel(dateStr: string, today: string): string {
 export function describeRepeat(task: PersonalTask): string {
   if (!task.recurrence) return "";
   if (task.recurrence === "daily") return "Every day";
+  if (task.recurrence === "interval") {
+    const m = task.repeat_every_min ?? 0;
+    const every = m % 60 === 0 ? `${m / 60} hr` : `${m} min`;
+    const win = task.window_start && task.window_end ? `, ${formatTime(task.window_start)}–${formatTime(task.window_end)}` : "";
+    return `Every ${every}${win}`;
+  }
   if (task.recurrence === "weekly") {
     const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const days = (task.repeat_days ?? []).slice().sort((a, b) => a - b).map((d) => names[d]);
