@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { createClient } from "@/utils/supabase/client";
@@ -10,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AuthModeToggle } from "@/components/auth-mode-toggle";
 
 const container: Variants = {
   hidden: {},
@@ -35,24 +35,21 @@ export default function LoginPage() {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    setLoading(false);
-
     if (error) {
       setError(error.message);
+      setLoading(false);
       return;
     }
 
-    router.push("/onboarding");
+    // keep the button in its loading state while we navigate away
+    router.push("/tasks");
     router.refresh();
   }
 
   return (
     <AuthLayout>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.05 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.05 }}>
+        <AuthModeToggle mode="login" />
         <h1 className="font-heading text-3xl font-bold tracking-tight">Welcome back</h1>
         <p className="mt-1.5 text-muted-foreground">Log in to your TeamTaskPro account.</p>
 
@@ -70,25 +67,18 @@ export default function LoginPage() {
             <AnimatePresence>
               {error && (
                 <motion.div key="error" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ type: "spring", stiffness: 300, damping: 30 }}>
-                  <Alert variant="destructive">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
+                  <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>
                 </motion.div>
               )}
             </AnimatePresence>
 
             <motion.div variants={item} className="mt-1">
               <Button type="submit" disabled={loading} className="w-full rounded-full bg-foreground text-background hover:bg-foreground/90">
-                {loading ? "Logging in..." : "Log in"}
+                {loading ? "Signing in…" : "Log in"}
               </Button>
             </motion.div>
           </motion.div>
         </form>
-
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="mt-6 text-[13px] text-muted-foreground">
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" className="font-semibold text-indigo-600 underline-offset-4 hover:underline dark:text-indigo-400">Sign up</Link>
-        </motion.p>
       </motion.div>
     </AuthLayout>
   );
