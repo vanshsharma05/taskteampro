@@ -19,9 +19,15 @@ function initialPermission(): NotificationPermission | "unsupported" {
   return Notification.permission;
 }
 
+const DISMISS_KEY = "reminders_banner_dismissed";
+
 export function Reminders({ tasks }: { tasks: PersonalTask[] }) {
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">(initialPermission);
-  const [dismissed, setDismissed] = useState(false);
+  // dismissing the banner should stick across visits, not reappear every reload
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; }
+  });
   const tasksRef = useRef(tasks);
   const firedRef = useRef<Set<string>>(new Set());
   const firedDayRef = useRef<string>("");
@@ -101,7 +107,8 @@ export function Reminders({ tasks }: { tasks: PersonalTask[] }) {
       {perm === "default" && (
         <button onClick={enable} className="shrink-0 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:bg-foreground/90">Turn on</button>
       )}
-      <button onClick={() => setDismissed(true)} aria-label="Dismiss" className="shrink-0 rounded-md p-1 text-muted-foreground/60 transition hover:text-foreground">
+      <button onClick={() => { setDismissed(true); try { localStorage.setItem(DISMISS_KEY, "1"); } catch { /* ignore */ } }}
+        aria-label="Dismiss" className="shrink-0 rounded-md p-1 text-muted-foreground/60 transition hover:text-foreground">
         <X className="size-4" />
       </button>
     </div>

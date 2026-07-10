@@ -6,7 +6,7 @@ import { X, CalendarDays, Clock, Flag, Plus, Tag } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { cn } from "@/lib/utils";
 import {
-  DEFAULT_CATEGORIES, istToday, dayOfWeek, formatTime, formatDateLabel,
+  DEFAULT_CATEGORIES, istToday, dayOfWeek, addDays, formatTime, formatDateLabel,
   type PersonalTask,
 } from "@/lib/personal";
 import { DatePicker } from "@/components/date-picker";
@@ -303,13 +303,28 @@ function AddTaskForm({
 
         <div className="mt-5 space-y-2">
           {repeat === "none" && (
-            <div className="rounded-2xl border border-border">
-              <button type="button" onClick={() => { setShowCal((s) => !s); setShowTime(false); }} className="flex w-full items-center justify-between px-3 py-2.5 text-sm">
-                <span className="flex items-center gap-2 text-muted-foreground"><CalendarDays className="size-4" /> When</span>
-                <span className="font-medium">{dueDate ? formatDateLabel(dueDate, today) : "Anytime"}</span>
-              </button>
-              {showCal && <div className="px-2 pb-2"><DatePicker value={dueDate} onChange={setDueDate} /></div>}
-            </div>
+            <>
+              {/* the three answers that cover most tasks — one tap, no calendar */}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "Today", value: today },
+                  { label: "Tomorrow", value: addDays(today, 1) },
+                  { label: "Anytime", value: null },
+                ].map(({ label, value }) => (
+                  <button key={label} type="button" onClick={() => { setDueDate(value); setShowCal(false); }}
+                    className={chip(dueDate === value && !showCal)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="rounded-2xl border border-border">
+                <button type="button" onClick={() => { setShowCal((s) => !s); setShowTime(false); }} className="flex w-full items-center justify-between px-3 py-2.5 text-sm">
+                  <span className="flex items-center gap-2 text-muted-foreground"><CalendarDays className="size-4" /> When</span>
+                  <span className="font-medium">{dueDate ? formatDateLabel(dueDate, today) : "Anytime"}</span>
+                </button>
+                {showCal && <div className="px-2 pb-2"><DatePicker value={dueDate} onChange={setDueDate} /></div>}
+              </div>
+            </>
           )}
 
           {repeat !== "interval" && (

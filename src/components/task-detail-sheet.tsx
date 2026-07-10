@@ -8,8 +8,9 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { cn } from "@/lib/utils";
+import { DatePicker } from "@/components/date-picker";
 import {
-  categoryIcon, istToday, isCheckedOn, isSnoozed, isSkippedOn,
+  categoryIcon, istToday, isCheckedOn, isSnoozed, isSkippedOn, addDays,
   formatTime, formatDateLabel, describeRepeat, formatSnoozeUntil,
   type PersonalTask, type SubTask,
 } from "@/lib/personal";
@@ -82,6 +83,7 @@ function DetailBody({
   const [subtasks, setSubtasks] = useState<SubTask[]>(task.subtasks ?? []);
   const [newSub, setNewSub] = useState("");
   const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const checked = isCheckedOn(task, today);
   const snoozed = isSnoozed(task);
@@ -206,6 +208,41 @@ function DetailBody({
             <Flag className="size-3.5" /> {task.importance === "high" ? "High priority" : "Priority"}
           </button>
         </div>
+
+        {/* reschedule — one-off tasks only; repeats follow their own rule */}
+        {!task.recurrence && !checked && (
+          <div className="mt-6">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Due date</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: "Today", date: today },
+                { label: "Tomorrow", date: addDays(today, 1) },
+                { label: "Next week", date: addDays(today, 7) },
+              ].map(({ label, date }) => (
+                <button key={label} type="button"
+                  onClick={() => { setShowDatePicker(false); patch({ due_date: date, skipped_on: null }); }}
+                  className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                    task.due_date === date ? "border-foreground bg-foreground text-background"
+                      : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground")}>
+                  {label}
+                </button>
+              ))}
+              <button type="button" onClick={() => setShowDatePicker((s) => !s)}
+                className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                  showDatePicker ? "border-foreground text-foreground"
+                    : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground")}>
+                {task.due_date && ![today, addDays(today, 1), addDays(today, 7)].includes(task.due_date)
+                  ? formatDateLabel(task.due_date, today) : "Pick a date…"}
+              </button>
+            </div>
+            {showDatePicker && (
+              <div className="mt-2 rounded-2xl border border-border">
+                <DatePicker value={task.due_date}
+                  onChange={(d) => { setShowDatePicker(false); patch({ due_date: d, skipped_on: null }); }} />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* subtasks */}
         <div className="mt-6">

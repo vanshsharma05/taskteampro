@@ -143,7 +143,9 @@ export function CalendarGrid({
           const dayTasks = tasksOn(dateStr);
           const dayGEvents = gEventsByDate.get(dateStr) ?? [];
           return (
-            <div key={dateStr} className="group relative flex min-h-[92px] flex-col bg-card p-1.5 transition hover:bg-muted/40 sm:min-h-[116px] sm:p-2">
+            <div key={dateStr}
+              className={cn("group relative flex min-h-[92px] flex-col p-1.5 transition hover:bg-muted/40 sm:min-h-[116px] sm:p-2",
+                isToday ? "bg-indigo-50/60 dark:bg-indigo-500/[0.06]" : "bg-card")}>
               <div className="mb-1 flex items-center justify-between">
                 <span className={cn("inline-flex size-6 items-center justify-center rounded-full text-xs font-bold",
                   isToday ? "bg-foreground text-background" : current ? "text-foreground" : "text-muted-foreground/40")}>

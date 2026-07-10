@@ -90,6 +90,20 @@ export default function TaskBoard({
     return () => window.clearInterval(id);
   }, []);
 
+  // press "n" anywhere (outside inputs) to add a task
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "n" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return;
+      if (document.body.style.overflow === "hidden") return;   // a sheet is already open
+      e.preventDefault();
+      setAddOpen(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // business account → show the Work switch
   useEffect(() => {
     let active = true;
@@ -123,8 +137,17 @@ export default function TaskBoard({
     if (!t.due_date) return !t.is_done;          // "anytime" task
     return t.due_date === today;
   };
-  const overdue = tasks.filter(inCat).filter((t) => isOverdue(t, today) && !isSnoozed(t));
-  const todo = tasks.filter(inCat).filter((t) => activeToday(t) && !isSnoozed(t) && !isSkippedOn(t, today));
+  // schedule order: timed tasks first (by time), then timeless; high priority wins ties
+  const timeCmp = (a: PersonalTask, b: PersonalTask) => {
+    const at = a.due_time ?? "99", bt = b.due_time ?? "99";
+    if (at !== bt) return at < bt ? -1 : 1;
+    if (a.importance !== b.importance) return a.importance === "high" ? -1 : 1;
+    return a.title.localeCompare(b.title);
+  };
+  const overdue = tasks.filter(inCat).filter((t) => isOverdue(t, today) && !isSnoozed(t))
+    .sort((a, b) => (a.due_date !== b.due_date ? (a.due_date! < b.due_date! ? -1 : 1) : timeCmp(a, b)));
+  const todo = tasks.filter(inCat).filter((t) => activeToday(t) && !isSnoozed(t) && !isSkippedOn(t, today))
+    .sort(timeCmp);
   const snoozed = tasks.filter(inCat).filter((t) => isSnoozed(t) && (activeToday(t) || isOverdue(t, today)));
   const skippedToday = tasks.filter(inCat).filter((t) => !isSnoozed(t) && isSkippedOn(t, today) && (t.recurrence ? occursOn(t, today) : !t.is_done));
   const doneToday = tasks.filter(inCat).filter((t) =>
@@ -164,13 +187,44 @@ export default function TaskBoard({
     setTasks((prev) => prev.map((t) => (t.id === next.id ? next : t)));
   }
 
-  async function deleteTask(task: PersonalTask) {
-    setTasks((prev) => prev.filter((t) => t.id !== task.id));
+  // deletes are undoable: the row disappears immediately but the database
+  // delete is committed only after the undo window closes
+  const [pendingDelete, setPendingDelete] = useState<{ task: PersonalTask; timer: number } | null>(null);
+
+  async function commitDelete(task: PersonalTask) {
     await createClient().from("tasks").delete().eq("id", task.id);
     if (task.google_event_id) {
       await deleteGoogleEvent(task.google_event_id);   // best-effort cleanup on Google
       void gcal.refresh();
     }
+  }
+
+  function deleteTask(task: PersonalTask) {
+    setPendingDelete((prev) => {
+      if (prev) { window.clearTimeout(prev.timer); void commitDelete(prev.task); }
+      const timer = window.setTimeout(() => {
+        void commitDelete(task);
+        setPendingDelete((p) => (p?.task.id === task.id ? null : p));
+      }, 6000);
+      return { task, timer };
+    });
+    setTasks((prev) => prev.filter((t) => t.id !== task.id));
+    if (detailId === task.id) setDetailId(null);
+  }
+
+  function undoDelete() {
+    setPendingDelete((prev) => {
+      if (!prev) return null;
+      window.clearTimeout(prev.timer);
+      setTasks((cur) => [prev.task, ...cur]);
+      return null;
+    });
+  }
+
+  async function moveToToday(task: PersonalTask) {
+    const updates = { due_date: today, skipped_on: null };
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...updates } : t)));
+    await createClient().from("tasks").update(updates).eq("id", task.id);
   }
 
   async function signOut() {
@@ -232,7 +286,7 @@ export default function TaskBoard({
               </p>
             )}
           </div>
-          <button onClick={() => setAddOpen(true)}
+          <button onClick={() => setAddOpen(true)} title="New task (n)"
             className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-sm transition hover:bg-foreground/90 active:scale-[0.97]">
             <Plus className="size-4" /> Add task
           </button>
@@ -245,7 +299,8 @@ export default function TaskBoard({
               <>
                 <DailyDigest pending={todo} doneCount={doneToday.length} overdueCount={overdue.length} />
                 <TodayView overdue={overdue} todo={todo} snoozed={snoozed} skipped={skippedToday} doneToday={doneToday}
-                  today={today} onToggle={toggleTask} onDelete={deleteTask} onOpen={(t) => setDetailId(t.id)} onAdd={() => setAddOpen(true)} />
+                  today={today} onToggle={toggleTask} onDelete={deleteTask} onOpen={(t) => setDetailId(t.id)}
+                  onMoveToToday={moveToToday} onAdd={() => setAddOpen(true)} />
                 <GoogleToday gcal={gcal} events={googleEvents} today={today} />
               </>
             )}
@@ -272,6 +327,21 @@ export default function TaskBoard({
 
       <TaskDetailSheet task={detailTask} onClose={() => setDetailId(null)}
         onUpdated={updateTask} onDelete={deleteTask} />
+
+      <AnimatePresence>
+        {pendingDelete && (
+          <motion.div key="undo" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}
+            className="fixed inset-x-0 bottom-5 z-[60] flex justify-center px-4">
+            <div className="flex items-center gap-3 rounded-full border border-border bg-foreground py-2 pl-4 pr-2 text-sm text-background shadow-lg">
+              <span className="max-w-[200px] truncate">Deleted &ldquo;{pendingDelete.task.title}&rdquo;</span>
+              <button type="button" onClick={undoDelete}
+                className="rounded-full bg-background/15 px-3 py-1 text-xs font-bold transition hover:bg-background/25">
+                Undo
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -293,11 +363,11 @@ function Section({ title, count, tone, children }: {
   );
 }
 
-function TodayView({ overdue, todo, snoozed, skipped, doneToday, today, onToggle, onDelete, onOpen, onAdd }: {
+function TodayView({ overdue, todo, snoozed, skipped, doneToday, today, onToggle, onDelete, onOpen, onMoveToToday, onAdd }: {
   overdue: PersonalTask[]; todo: PersonalTask[]; snoozed: PersonalTask[]; skipped: PersonalTask[];
   doneToday: PersonalTask[]; today: string;
   onToggle: (t: PersonalTask) => void; onDelete: (t: PersonalTask) => void;
-  onOpen: (t: PersonalTask) => void; onAdd: () => void;
+  onOpen: (t: PersonalTask) => void; onMoveToToday: (t: PersonalTask) => void; onAdd: () => void;
 }) {
   if (overdue.length + todo.length + snoozed.length + skipped.length + doneToday.length === 0) {
     return (
@@ -315,7 +385,7 @@ function TodayView({ overdue, todo, snoozed, skipped, doneToday, today, onToggle
     <div className="space-y-7">
       {overdue.length > 0 && (
         <Section title="Overdue" tone="red" count={overdue.length}>
-          {overdue.map((t) => <TaskItem key={t.id} task={t} today={today} icon={categoryIcon(t.category)} onToggle={() => onToggle(t)} onDelete={() => onDelete(t)} onOpen={() => onOpen(t)} />)}
+          {overdue.map((t) => <TaskItem key={t.id} task={t} today={today} icon={categoryIcon(t.category)} onToggle={() => onToggle(t)} onDelete={() => onDelete(t)} onOpen={() => onOpen(t)} onMoveToToday={() => onMoveToToday(t)} />)}
         </Section>
       )}
       <Section title="To do" count={todo.length}>
@@ -373,9 +443,9 @@ function UpcomingView({ byDate, repeating, today, onToggle, onDelete, onOpen }: 
   );
 }
 
-function TaskItem({ task, today, hideCheck, icon: Icon, onToggle, onDelete, onOpen }: {
+function TaskItem({ task, today, hideCheck, icon: Icon, onToggle, onDelete, onOpen, onMoveToToday }: {
   task: PersonalTask; today: string; hideCheck?: boolean; icon: LucideIcon;
-  onToggle: () => void; onDelete: () => void; onOpen: () => void;
+  onToggle: () => void; onDelete: () => void; onOpen: () => void; onMoveToToday?: () => void;
 }) {
   const checked = isCheckedOn(task, today);
   const overdue = isOverdue(task, today);
@@ -388,7 +458,8 @@ function TaskItem({ task, today, hideCheck, icon: Icon, onToggle, onDelete, onOp
     <div className="group flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 transition hover:border-foreground/20">
       {!hideCheck ? (
         <button type="button" onClick={onToggle} aria-label={checked ? "Mark not done" : "Mark done"}
-          className={cn("grid size-6 shrink-0 place-items-center rounded-full border-2 transition active:scale-90",
+          className={cn("relative grid size-6 shrink-0 place-items-center rounded-full border-2 transition active:scale-90",
+            "after:absolute after:-inset-2 after:content-['']",   // 40px touch target
             checked ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/30 hover:border-emerald-500")}>
           <Check className={cn("size-3.5 transition-transform", checked ? "scale-100" : "scale-0")} strokeWidth={3} />
         </button>
@@ -420,8 +491,14 @@ function TaskItem({ task, today, hideCheck, icon: Icon, onToggle, onDelete, onOp
         </div>
       </button>
       {high && <Flag className="size-3.5 shrink-0 text-amber-500" />}
+      {onMoveToToday && overdue && (
+        <button type="button" onClick={onMoveToToday} title="Move to today"
+          className="shrink-0 rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-foreground/30 hover:text-foreground">
+          Today
+        </button>
+      )}
       <button type="button" onClick={onDelete} aria-label="Delete task"
-        className="shrink-0 rounded-md p-1 text-muted-foreground/50 transition hover:bg-muted hover:text-red-600">
+        className="relative shrink-0 rounded-md p-1 text-muted-foreground/50 transition after:absolute after:-inset-1.5 after:content-[''] hover:bg-muted hover:text-red-600">
         <Trash2 className="size-4" />
       </button>
     </div>
