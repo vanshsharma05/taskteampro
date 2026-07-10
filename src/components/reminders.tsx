@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Bell, X } from "lucide-react";
-import { istToday, occursOn, isCheckedOn, formatTime, type PersonalTask } from "@/lib/personal";
+import { istToday, occursOn, isCheckedOn, isSnoozed, isSkippedOn, formatTime, type PersonalTask } from "@/lib/personal";
 
 function istHHMM(): string {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -24,6 +24,7 @@ export function Reminders({ tasks }: { tasks: PersonalTask[] }) {
   const [dismissed, setDismissed] = useState(false);
   const tasksRef = useRef(tasks);
   const firedRef = useRef<Set<string>>(new Set());
+  const firedDayRef = useRef<string>("");
 
   useEffect(() => {
     tasksRef.current = tasks;
@@ -33,6 +34,10 @@ export function Reminders({ tasks }: { tasks: PersonalTask[] }) {
     if (perm !== "granted") return;
     const tick = () => {
       const today = istToday();
+      if (firedDayRef.current !== today) {
+        firedRef.current.clear();
+        firedDayRef.current = today;
+      }
       const now = istHHMM();
       const nowMin = toMin(now);
 
@@ -49,6 +54,7 @@ export function Reminders({ tasks }: { tasks: PersonalTask[] }) {
       };
 
       for (const t of tasksRef.current) {
+        if (isSnoozed(t) || isSkippedOn(t, today)) continue;   // snoozed or skipped — stay quiet
         if (t.recurrence === "interval") {
           if (!t.window_start || !t.window_end || !t.repeat_every_min) continue;
           const ws = toMin(t.window_start), we = toMin(t.window_end);

@@ -25,10 +25,11 @@ const EVERY = [
 const SLOTS = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"}`);
 
 export function AddTaskSheet({
-  open, onClose, userId, onCreated, knownCategories = [],
+  open, onClose, userId, onCreated, knownCategories = [], initialDate = null,
 }: {
   open: boolean; onClose: () => void; userId: string;
   onCreated: (task: PersonalTask) => void; knownCategories?: string[];
+  initialDate?: string | null;
 }) {
   // body scroll lock + escape to close
   useEffect(() => {
@@ -54,7 +55,7 @@ export function AddTaskSheet({
             initial={{ y: 40, opacity: 0.6 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}>
             {/* mounting fresh on every open gives the form a clean slate without a reset effect */}
-            <AddTaskForm onClose={onClose} userId={userId} onCreated={onCreated} knownCategories={knownCategories} />
+            <AddTaskForm onClose={onClose} userId={userId} onCreated={onCreated} knownCategories={knownCategories} initialDate={initialDate} />
           </motion.div>
         </motion.div>
       )}
@@ -63,9 +64,10 @@ export function AddTaskSheet({
 }
 
 function AddTaskForm({
-  onClose, userId, onCreated, knownCategories,
+  onClose, userId, onCreated, knownCategories, initialDate,
 }: {
   onClose: () => void; userId: string; onCreated: (task: PersonalTask) => void; knownCategories: string[];
+  initialDate: string | null;
 }) {
   const today = istToday();
 
@@ -77,7 +79,7 @@ function AddTaskForm({
   const [customMode, setCustomMode] = useState(false);
   const [customValue, setCustomValue] = useState("");
 
-  const [dueDate, setDueDate] = useState<string | null>(today);
+  const [dueDate, setDueDate] = useState<string | null>(initialDate ?? today);
   const [dueTime, setDueTime] = useState<string | null>(null);
   const [showCal, setShowCal] = useState(false);
   const [showTime, setShowTime] = useState(false);
@@ -142,6 +144,7 @@ function AddTaskForm({
       recurrence: data.recurrence, repeat_days: data.repeat_days, repeat_dom: data.repeat_dom,
       repeat_every_min: data.repeat_every_min, window_start: data.window_start, window_end: data.window_end,
       is_done: data.is_done, last_done_on: data.last_done_on, completed_at: data.completed_at,
+      snoozed_until: data.snoozed_until ?? null, skipped_on: data.skipped_on ?? null, subtasks: data.subtasks ?? [],
     });
     onClose();
   }

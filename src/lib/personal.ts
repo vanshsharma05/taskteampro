@@ -4,6 +4,8 @@ import {
 
 export type Recurrence = "daily" | "weekly" | "monthly" | "interval" | null;
 
+export interface SubTask { id: string; text: string; done: boolean; }
+
 export interface PersonalTask {
   id: string;
   title: string;
@@ -21,6 +23,9 @@ export interface PersonalTask {
   is_done: boolean;
   last_done_on: string | null;
   completed_at: string | null;
+  snoozed_until: string | null;   // ISO timestamp; hidden from To do until then
+  skipped_on: string | null;      // one-off: any value = skipped; recurring: skips that day
+  subtasks: SubTask[] | null;
 }
 
 export interface CategoryDef { name: string; Icon: LucideIcon; }
@@ -74,7 +79,28 @@ export function isCheckedOn(task: PersonalTask, dateStr: string): boolean {
 }
 
 export function isOverdue(task: PersonalTask, today: string): boolean {
-  return !task.recurrence && !task.is_done && !!task.due_date && task.due_date < today;
+  return !task.recurrence && !task.is_done && !isSkippedOn(task, today) && !!task.due_date && task.due_date < today;
+}
+
+export function isSnoozed(task: PersonalTask, now: Date = new Date()): boolean {
+  return !!task.snoozed_until && new Date(task.snoozed_until).getTime() > now.getTime();
+}
+
+export function isSkippedOn(task: PersonalTask, dateStr: string): boolean {
+  if (!task.skipped_on) return false;
+  return task.recurrence ? task.skipped_on === dateStr : true;
+}
+
+export function subtaskProgress(task: PersonalTask): { done: number; total: number } {
+  const subs = task.subtasks ?? [];
+  return { done: subs.filter((s) => s.done).length, total: subs.length };
+}
+
+export function formatSnoozeUntil(iso: string): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  return day === istToday() ? time : `${formatDateLabel(day, istToday())}, ${time}`;
 }
 
 export function formatTime(t: string | null): string {
