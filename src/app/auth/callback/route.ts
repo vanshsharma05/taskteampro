@@ -13,12 +13,16 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      const dest = new URL(next.startsWith("/") ? next : "/onboarding", url.origin);
+      const safeNext = next.startsWith("/") ? next : "/onboarding";
       const providerToken = data.session?.provider_token;
       if (providerToken) {
+        // land on a client page that stores the token BEFORE any further
+        // server redirects (which would drop the URL hash)
+        const dest = new URL(`/auth/complete?next=${encodeURIComponent(safeNext)}`, url.origin);
         dest.hash = `gcal_token=${encodeURIComponent(providerToken)}&gcal_exp=${Date.now() + 3500_000}`;
+        return NextResponse.redirect(dest);
       }
-      return NextResponse.redirect(dest);
+      return NextResponse.redirect(new URL(safeNext, url.origin));
     }
   }
 
