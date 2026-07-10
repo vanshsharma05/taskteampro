@@ -15,7 +15,8 @@ export interface GoogleEvent {
   startMs: number;
 }
 
-const SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+// readonly: list calendars + read events; events: create/delete events we push
+const SCOPE = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
 const STORAGE_KEY = "gcal_token";
 const GSI_SRC = "https://accounts.google.com/gsi/client";
 
@@ -97,6 +98,65 @@ function toLocalDate(d: Date): string {
 
 function toLocalTime(d: Date): string {
   return d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
+}
+
+function addMinutes(hhmm: string, mins: number): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const total = (h * 60 + m + mins) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function nextDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
+/**
+ * Creates an event on the user's primary calendar for a task.
+ * Timed tasks become 30-minute events; dateless times are all-day.
+ * Returns the created Google event id.
+ */
+export async function createGoogleEvent(opts: {
+  title: string; date: string; time?: string | null; description?: string | null;
+}): Promise<string> {
+  const token = getStoredToken();
+  if (!token) throw new Error("Not connected to Google");
+
+  const body = opts.time
+    ? {
+        summary: opts.title,
+        description: opts.description ?? undefined,
+        start: { dateTime: `${opts.date}T${opts.time.slice(0, 5)}:00`, timeZone: "Asia/Kolkata" },
+        end: { dateTime: `${opts.date}T${addMinutes(opts.time.slice(0, 5), 30)}:00`, timeZone: "Asia/Kolkata" },
+      }
+    : {
+        summary: opts.title,
+        description: opts.description ?? undefined,
+        start: { date: opts.date },
+        end: { date: nextDay(opts.date) },
+      };
+
+  const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401 || res.status === 403) { throw new Error("Google session lacks write access — reconnect"); }
+  if (!res.ok) throw new Error(`Google API error ${res.status}`);
+  const data = await res.json();
+  return data.id as string;
+}
+
+/** Best-effort delete of a pushed event from the primary calendar. */
+export async function deleteGoogleEvent(eventId: string): Promise<void> {
+  const token = getStoredToken();
+  if (!token) return;
+  try {
+    await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch { /* task deletion should not fail because of Google */ }
 }
 
 /** Fetches events across all the user's calendars for the given window. */

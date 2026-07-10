@@ -26,6 +26,7 @@ export interface PersonalTask {
   snoozed_until: string | null;   // ISO timestamp; hidden from To do until then
   skipped_on: string | null;      // one-off: any value = skipped; recurring: skips that day
   subtasks: SubTask[] | null;
+  google_event_id: string | null; // Google Calendar event we pushed for this task
 }
 
 export interface CategoryDef { name: string; Icon: LucideIcon; }

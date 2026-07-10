@@ -10,7 +10,7 @@ export default async function TasksPage() {
   const { data: tasks } = await supabase
     .from("tasks")
     .select(
-      "id, title, description, category, importance, due_date, due_time, recurrence, repeat_days, repeat_dom, repeat_every_min, window_start, window_end, is_done, last_done_on, completed_at, snoozed_until, skipped_on, subtasks",
+      "id, title, description, category, importance, due_date, due_time, recurrence, repeat_days, repeat_dom, repeat_every_min, window_start, window_end, is_done, last_done_on, completed_at, snoozed_until, skipped_on, subtasks, google_event_id",
     )
     .eq("user_id", user.id)
     .is("company_id", null)

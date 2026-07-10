@@ -11,6 +11,7 @@ import {
 } from "@/lib/personal";
 import { DatePicker } from "@/components/date-picker";
 import { TimePicker } from "@/components/time-picker";
+import { hasGoogleToken, createGoogleEvent } from "@/lib/google-calendar";
 
 type Repeat = "none" | "daily" | "weekly" | "monthly" | "interval";
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -95,6 +96,11 @@ function AddTaskForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // push one-off dated tasks to Google Calendar when connected
+  const [gcalConnected] = useState(() => hasGoogleToken());
+  const [addToGcal, setAddToGcal] = useState(true);
+  const canPushToGcal = gcalConnected && repeat === "none" && !!dueDate;
+
   const finalCategory = (customMode ? customValue.trim() : category) || null;
   const weeklyInvalid = repeat === "weekly" && repeatDays.length === 0;
   const intervalInvalid = repeat === "interval" && winStart >= winEnd;
@@ -138,6 +144,17 @@ function AddTaskForm({
 
     if (error || !data) { setError(error?.message ?? "Could not save the task."); setSaving(false); return; }
 
+    // best-effort push to Google Calendar; the task itself is already saved
+    let googleEventId: string | null = null;
+    if (canPushToGcal && addToGcal && dueDate) {
+      try {
+        googleEventId = await createGoogleEvent({
+          title: data.title, date: dueDate, time: dueTime, description: data.description,
+        });
+        await supabase.from("tasks").update({ google_event_id: googleEventId }).eq("id", data.id);
+      } catch { /* Google hiccup shouldn't block the task */ }
+    }
+
     onCreated({
       id: data.id, title: data.title, description: data.description, category: data.category,
       importance: data.importance, due_date: data.due_date, due_time: data.due_time,
@@ -145,6 +162,7 @@ function AddTaskForm({
       repeat_every_min: data.repeat_every_min, window_start: data.window_start, window_end: data.window_end,
       is_done: data.is_done, last_done_on: data.last_done_on, completed_at: data.completed_at,
       snoozed_until: data.snoozed_until ?? null, skipped_on: data.skipped_on ?? null, subtasks: data.subtasks ?? [],
+      google_event_id: googleEventId,
     });
     onClose();
   }
@@ -305,7 +323,7 @@ function AddTaskForm({
           )}
         </div>
 
-        <div className="mt-5">
+        <div className="mt-5 flex flex-wrap gap-1.5">
           <button type="button" onClick={() => setImportance((p) => (p === "high" ? "normal" : "high"))}
             className={cn("inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition",
               importance === "high" ? "border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
@@ -313,6 +331,15 @@ function AddTaskForm({
             <Flag className="size-3.5" />
             {importance === "high" ? "High priority" : "Mark high priority"}
           </button>
+          {canPushToGcal && (
+            <button type="button" onClick={() => setAddToGcal((p) => !p)}
+              className={cn("inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                addToGcal ? "border-indigo-400 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
+                  : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground")}>
+              <CalendarDays className="size-3.5" />
+              {addToGcal ? "Adding to Google Calendar" : "Add to Google Calendar"}
+            </button>
+          )}
         </div>
 
         {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">{error}</p>}

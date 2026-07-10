@@ -17,6 +17,7 @@ import { DailyDigest } from "@/components/daily-digest";
 import { CalendarGrid } from "@/components/calendar-grid";
 import { Reminders } from "@/components/reminders";
 import { useGoogleCalendar } from "@/components/use-google-calendar";
+import { deleteGoogleEvent } from "@/lib/google-calendar";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_CATEGORIES, categoryIcon, istToday, occursOn, isCheckedOn,
@@ -54,6 +55,7 @@ function normalize(t: Incoming): PersonalTask {
     snoozed_until: t.snoozed_until ?? null,
     skipped_on: t.skipped_on ?? null,
     subtasks: t.subtasks ?? [],
+    google_event_id: t.google_event_id ?? null,
   };
 }
 
@@ -74,6 +76,12 @@ export default function TaskBoard({
   const gcal = useGoogleCalendar();
 
   const detailTask = detailId ? tasks.find((t) => t.id === detailId) ?? null : null;
+
+  // hide Google copies of events we pushed ourselves — the task row already shows them
+  const googleEvents = useMemo(() => {
+    const pushed = new Set(tasks.map((t) => t.google_event_id).filter(Boolean) as string[]);
+    return gcal.events.filter((e) => !pushed.has(e.id.split(":").pop() ?? ""));
+  }, [gcal.events, tasks]);
 
   // re-render every minute so expired snoozes surface without a reload
   const [, setNowTick] = useState(0);
@@ -159,6 +167,10 @@ export default function TaskBoard({
   async function deleteTask(task: PersonalTask) {
     setTasks((prev) => prev.filter((t) => t.id !== task.id));
     await createClient().from("tasks").delete().eq("id", task.id);
+    if (task.google_event_id) {
+      await deleteGoogleEvent(task.google_event_id);   // best-effort cleanup on Google
+      void gcal.refresh();
+    }
   }
 
   async function signOut() {
@@ -234,7 +246,7 @@ export default function TaskBoard({
                 <DailyDigest pending={todo} doneCount={doneToday.length} overdueCount={overdue.length} />
                 <TodayView overdue={overdue} todo={todo} snoozed={snoozed} skipped={skippedToday} doneToday={doneToday}
                   today={today} onToggle={toggleTask} onDelete={deleteTask} onOpen={(t) => setDetailId(t.id)} onAdd={() => setAddOpen(true)} />
-                <GoogleToday gcal={gcal} today={today} />
+                <GoogleToday gcal={gcal} events={googleEvents} today={today} />
               </>
             )}
             {view === "upcoming" && (
@@ -244,7 +256,7 @@ export default function TaskBoard({
             {view === "calendar" && (
               <div className="space-y-4">
                 <CalendarGrid tasks={tasks.filter(inCat)}
-                  googleEvents={gcal.events.map((e) => ({ id: e.id, title: e.title, date: e.date, time: e.time }))}
+                  googleEvents={googleEvents.map((e) => ({ id: e.id, title: e.title, date: e.date, time: e.time }))}
                   onOpenTask={(t) => setDetailId(t.id)}
                   onCreateOnDate={(d) => { setAddDate(d); setAddOpen(true); }} />
                 <GoogleConnectCard gcal={gcal} />
@@ -417,7 +429,11 @@ function TaskItem({ task, today, hideCheck, icon: Icon, onToggle, onDelete, onOp
 }
 
 /** Read-only "what's on your Google Calendar today" section for the Today view. */
-function GoogleToday({ gcal, today }: { gcal: ReturnType<typeof useGoogleCalendar>; today: string }) {
+function GoogleToday({ gcal, events, today }: {
+  gcal: ReturnType<typeof useGoogleCalendar>;
+  events: ReturnType<typeof useGoogleCalendar>["events"];
+  today: string;
+}) {
   if (!gcal.available) return null;
   if (!gcal.connected) {
     return (
@@ -436,7 +452,7 @@ function GoogleToday({ gcal, today }: { gcal: ReturnType<typeof useGoogleCalenda
       </div>
     );
   }
-  const todaysEvents = gcal.events.filter((e) => e.date === today);
+  const todaysEvents = events.filter((e) => e.date === today);
   return (
     <div className="mt-7 space-y-2">
       <div className="flex items-center gap-2 px-1">
