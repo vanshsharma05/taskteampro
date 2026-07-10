@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  GOOGLE_CLIENT_ID, connectGoogle, disconnectGoogle, fetchGoogleEvents,
-  hasGoogleToken, type GoogleEvent,
+  GOOGLE_CLIENT_ID, adoptTokenFromUrlHash, connectGoogle, disconnectGoogle,
+  fetchGoogleEvents, hasGoogleToken, type GoogleEvent,
 } from "@/lib/google-calendar";
 
 /** Google Calendar events from a week back to two months ahead. */
 export function useGoogleCalendar() {
-  const available = !!GOOGLE_CLIENT_ID;
   const [connected, setConnected] = useState(false);
+  // usable with the env client ID (popup connect) OR a token from Google login
+  const available = !!GOOGLE_CLIENT_ID || connected;
   const [connecting, setConnecting] = useState(false);
   const [events, setEvents] = useState<GoogleEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -26,9 +27,10 @@ export function useGoogleCalendar() {
     }
   }, []);
 
-  // resume an existing session token on mount
+  // adopt a token handed over by Google login, or resume an existing one
   useEffect(() => {
-    if (!available || !hasGoogleToken()) return;
+    adoptTokenFromUrlHash();
+    if (!hasGoogleToken()) return;
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
@@ -36,7 +38,7 @@ export function useGoogleCalendar() {
       void refresh();
     });
     return () => { cancelled = true; };
-  }, [available, refresh]);
+  }, [refresh]);
 
   const connect = useCallback(async () => {
     setConnecting(true);

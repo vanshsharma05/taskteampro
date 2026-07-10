@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AuthModeToggle } from "@/components/auth-mode-toggle";
+import { GoogleAuthButton, AuthDivider } from "@/components/google-auth-button";
 
 const container: Variants = {
   hidden: {},
@@ -78,7 +79,12 @@ export default function SignUpPage() {
             <h1 className="font-heading text-3xl font-bold tracking-tight">Create your account</h1>
             <p className="mt-1.5 text-muted-foreground">Start tracking your day in a few minutes.</p>
 
-            <form onSubmit={handleSubmit} className="mt-8">
+            <div className="mt-8">
+              <GoogleAuthButton />
+              <AuthDivider />
+            </div>
+
+            <form onSubmit={handleSubmit}>
               <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col gap-4">
                 <motion.div variants={item} className="grid gap-1.5">
                   <Label htmlFor="email">Email</Label>

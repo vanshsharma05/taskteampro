@@ -40,6 +40,26 @@ export function hasGoogleToken(): boolean {
   return getStoredToken() !== null;
 }
 
+/**
+ * Picks up a Google access token forwarded by /auth/callback in the URL hash
+ * after "Continue with Google" login, stores it, and cleans the URL.
+ * Returns true if a token was adopted.
+ */
+export function adoptTokenFromUrlHash(): boolean {
+  try {
+    const hash = window.location.hash;
+    if (!hash.includes("gcal_token=")) return false;
+    const params = new URLSearchParams(hash.slice(1));
+    const token = params.get("gcal_token");
+    const exp = Number(params.get("gcal_exp"));
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    if (!token) return false;
+    const stored: StoredToken = { token, expiresAt: Number.isFinite(exp) && exp > Date.now() ? exp : Date.now() + 3500_000 };
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    return true;
+  } catch { return false; }
+}
+
 export function disconnectGoogle(): void {
   try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 }
