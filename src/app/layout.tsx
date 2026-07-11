@@ -21,9 +21,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TeamTaskPro",
+  title: "TaskTeamPro",
   description: "Get work done. On time. Every time.",
-  appleWebApp: { capable: true, title: "TeamTaskPro", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "TaskTeamPro", statusBarStyle: "default" },
   icons: { apple: "/apple-touch-icon.png" },
 };
 

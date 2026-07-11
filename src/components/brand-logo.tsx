@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 /**
- * The TeamTaskPro mark: "the honest tick" — a checkmark that doubles as
+ * The TaskTeamPro mark: "the honest tick" — a checkmark that doubles as
  * clock hands at ten-past-ten, breaking out of the dial. Done + time,
  * one glyph. Keep this SVG in sync with public/icon-*.png (generated
  * from the same geometry).
@@ -20,11 +20,11 @@ export function LogoMark({ className }: { className?: string }) {
   );
 }
 
-/** Typography lockup: TeamTask in ink, Pro in the brand emerald. */
+/** Typography lockup: TaskTeam in ink, Pro in the brand emerald. */
 export function LogoWordmark({ light = false, className }: { light?: boolean; className?: string }) {
   return (
     <span className={cn("font-heading font-bold tracking-tight", light ? "text-white" : "text-foreground", className)}>
-      TeamTask<span className="text-emerald-500">Pro</span>
+      TaskTeam<span className="text-emerald-500">Pro</span>
     </span>
   );
 }

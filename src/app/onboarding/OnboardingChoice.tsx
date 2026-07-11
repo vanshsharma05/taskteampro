@@ -65,13 +65,13 @@ export default function OnboardingChoice({ userId }: { userId: string }) {
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26 }} className="relative">
         <Link href="/" className="mb-8 flex items-center justify-center gap-2.5">
           <div className="flex size-9 items-center justify-center rounded-xl bg-foreground font-heading text-base font-bold text-background shadow-sm">T</div>
-          <span className="font-heading text-lg font-bold tracking-tight text-foreground">TeamTaskPro</span>
+          <span className="font-heading text-lg font-bold tracking-tight text-foreground">TaskTeamPro</span>
         </Link>
       </motion.div>
 
       <motion.h1 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26, delay: 0.05 }}
         className="relative font-heading text-3xl font-bold tracking-tight text-foreground">
-        How will you use TeamTaskPro?
+        How will you use TaskTeamPro?
       </motion.h1>
       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.12 }} className="relative mt-2 text-lg text-muted-foreground">
         Pick the option that fits you best.
@@ -80,7 +80,7 @@ export default function OnboardingChoice({ userId }: { userId: string }) {
       <motion.div variants={container} initial="hidden" animate="show" className="relative mt-10 grid w-full max-w-3xl gap-4 sm:grid-cols-3">
         <ChoiceCard icon={User} title="Just me" subtitle="Personal tasks and reminders" loading={saving === "individual"} disabled={saving !== null} onClick={() => handleChoice("individual")} />
         <ChoiceCard icon={Building2} title="Set up my company" subtitle="I'm the owner or admin" loading={saving === "create"} disabled={saving !== null} onClick={() => handleChoice("create")} />
-        <ChoiceCard icon={Users} title="Join my team" subtitle="My company is already on TeamTaskPro" loading={saving === "join"} disabled={saving !== null} onClick={() => handleChoice("join")} />
+        <ChoiceCard icon={Users} title="Join my team" subtitle="My company is already on TaskTeamPro" loading={saving === "join"} disabled={saving !== null} onClick={() => handleChoice("join")} />
       </motion.div>
 
       <AnimatePresence>

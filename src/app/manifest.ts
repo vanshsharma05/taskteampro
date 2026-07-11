@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "TeamTaskPro",
-    short_name: "TeamTaskPro",
+    name: "TaskTeamPro",
+    short_name: "TaskTeamPro",
     description: "Plan your day in one sentence — tasks, reminders, and Google Calendar in one place.",
     id: "/",
     start_url: "/tasks",

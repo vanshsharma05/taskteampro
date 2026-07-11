@@ -52,7 +52,7 @@ export default function LoginPage() {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.05 }}>
         <AuthModeToggle mode="login" />
         <h1 className="font-heading text-3xl font-bold tracking-tight">Welcome back</h1>
-        <p className="mt-1.5 text-muted-foreground">Log in to your TeamTaskPro account.</p>
+        <p className="mt-1.5 text-muted-foreground">Log in to your TaskTeamPro account.</p>
 
         <div className="mt-8">
           <GoogleAuthButton />

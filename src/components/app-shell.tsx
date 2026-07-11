@@ -108,7 +108,7 @@ function SidebarBody({
       <div className="flex items-center gap-2.5 px-2">
         <LogoMark className="size-9 rounded-xl shadow-sm ring-1 ring-white/10" />
         <div className="leading-tight">
-          <p className="font-heading text-base font-bold tracking-tight">TeamTask<span className="text-emerald-500">Pro</span></p>
+          <p className="font-heading text-base font-bold tracking-tight">TaskTeam<span className="text-emerald-500">Pro</span></p>
           <span className={cn(
             "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase",
             inPersonal

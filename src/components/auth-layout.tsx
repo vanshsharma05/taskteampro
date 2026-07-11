@@ -37,7 +37,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           </ul>
         </motion.div>
 
-        <p className="relative text-[13px] text-white/40">© {new Date().getFullYear()} TeamTaskPro</p>
+        <p className="relative text-[13px] text-white/40">© {new Date().getFullYear()} TaskTeamPro</p>
       </div>
 
       {/* Right — form */}

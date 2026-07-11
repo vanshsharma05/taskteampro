@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
-import { Mic, Sun, CloudSun, AlertTriangle, Clock, Check } from "lucide-react";
+import { Mic, Moon, CloudSun, AlertTriangle, Clock, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,23 +36,24 @@ function Reveal({ children, className, delay = 0 }: {
 
 function Nav() {
   return (
-    <header className="sticky top-0 z-40 border-b border-black/5 bg-white/90 backdrop-blur dark:border-white/5 dark:bg-neutral-950/90">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+    <header className="sticky top-0 z-40 px-3 pt-3">
+      {/* floating white bar per comp */}
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between rounded-2xl bg-white px-4 shadow-sm shadow-black/5 sm:px-6 dark:bg-neutral-900">
         {/* text-only logo per design note — no mark in the nav */}
         <Link href="/" className="font-heading text-lg font-semibold tracking-tight">
-          TeamTask<span className="text-emerald-600 dark:text-emerald-400">Pro</span>
+          TaskTeam<span className="text-emerald-600 dark:text-emerald-400">Pro</span>
         </Link>
         <nav className="hidden items-center gap-7 text-sm font-medium text-neutral-600 md:flex dark:text-neutral-300">
           <a href="#task" className="transition-colors hover:text-neutral-950 dark:hover:text-white">Product</a>
           <a href="#team" className="transition-colors hover:text-neutral-950 dark:hover:text-white">Use cases</a>
         </nav>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           <Link href="/login"
-            className="flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-neutral-700 transition-colors hover:text-neutral-950 dark:text-neutral-300 dark:hover:text-white">
+            className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-neutral-700 transition-colors hover:text-neutral-950 sm:px-4 dark:text-neutral-300 dark:hover:text-white">
             Log in
           </Link>
           <Link href="/signup"
-            className="flex min-h-11 items-center rounded-xl bg-emerald-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700">
+            className="flex min-h-11 items-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 sm:px-5">
             Get started
           </Link>
         </div>
@@ -135,22 +136,23 @@ function AppMock() {
 
 function Hero() {
   return (
-    <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-24 pt-16 lg:grid-cols-2 lg:gap-10 lg:pt-24">
+    <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-24 pt-16 lg:grid-cols-2 lg:gap-8 lg:pt-24">
       <Reveal>
         <h1 className="font-heading text-5xl font-bold leading-[1.04] tracking-tight sm:text-6xl lg:text-7xl">
           Finally.<br />An honest<br />planner.
         </h1>
         <p className="mt-6 max-w-md text-[17px] leading-relaxed text-neutral-600 dark:text-neutral-300">
-          TeamTaskPro doesn&rsquo;t just list your tasks; it learns your reality. Spoken capture,
+          TaskTeamPro doesn&rsquo;t just list your tasks; it learns your reality. Spoken capture,
           smart scheduling, and accountability insights that keep you on track.
           Plan visually. Live realistically.
         </p>
         <Link href="/signup"
-          className="mt-8 inline-flex min-h-12 items-center rounded-xl bg-emerald-600 px-7 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700">
+          className="mt-8 inline-flex min-h-12 items-center rounded-lg bg-emerald-600 px-7 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700">
           Start Planning for Free
         </Link>
       </Reveal>
-      <Reveal delay={0.15}><AppMock /></Reveal>
+      {/* window bleeds off the right edge on desktop, like the comp */}
+      <Reveal delay={0.15} className="lg:-mr-14 xl:-mr-24"><AppMock /></Reveal>
     </section>
   );
 }
@@ -165,8 +167,22 @@ function TeamMock() {
   ];
   return (
     <div className="grid items-center gap-10 lg:grid-cols-[2fr_3fr]">
-      {/* floating assignment cards */}
+      {/* floating assignment cards + loose avatars, like the comp */}
       <div className="relative mx-auto h-56 w-full max-w-sm">
+        {[
+          { top: "16%", left: "88%", av: "SK", avc: "bg-emerald-200 text-emerald-800" },
+          { top: "-4%", left: "2%", av: "NM", avc: "bg-rose-200 text-rose-700" },
+          { top: "76%", left: "0%", av: "DG", avc: "bg-indigo-200 text-indigo-700" },
+          { top: "88%", left: "86%", av: "TJ", avc: "bg-amber-200 text-amber-800" },
+        ].map((a, i) => (
+          <motion.span key={`av${i}`}
+            initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.8, ease: EASE, delay: 0.2 + i * 0.08 }}
+            className={cn("absolute z-10 grid size-10 place-items-center rounded-full border-2 border-white text-[11px] font-bold shadow-md dark:border-neutral-800", a.avc)}
+            style={{ top: a.top, left: a.left }}>
+            {a.av}
+          </motion.span>
+        ))}
         {[
           { top: "0%", left: "18%", w: "62%", av: "PK", avc: "bg-violet-200 text-violet-700" },
           { top: "36%", left: "2%", w: "58%", av: "RC", avc: "bg-amber-200 text-amber-700" },
@@ -268,16 +284,25 @@ function VoiceDemo() {
       </div>
 
       {/* extraction */}
-      <motion.p className="mt-6 text-center text-[13px] font-semibold text-neutral-500 dark:text-neutral-400"
+      <motion.div className="mt-6 flex items-center justify-center gap-3 text-[13px] font-semibold text-neutral-500 dark:text-neutral-400"
         initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ duration: 0.4, ease: EASE }}>
-        What AI understood
-      </motion.p>
-      <div className="mt-1 grid grid-cols-3">
+        {/* curved arrows flanking the label, like the comp */}
+        <svg viewBox="0 0 40 24" className="h-5 w-8 -scale-x-100 text-neutral-400" fill="none" aria-hidden>
+          <path d="M36 2 C20 4, 8 10, 5 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M2 15 L5 21 L10 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+        What AI understood?
+        <svg viewBox="0 0 40 24" className="h-5 w-8 text-neutral-400" fill="none" aria-hidden>
+          <path d="M36 2 C20 4, 8 10, 5 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M2 15 L5 21 L10 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      </motion.div>
+      <div className="mt-2 grid grid-cols-3 divide-x divide-neutral-200 dark:divide-neutral-700">
         {items.map((it, i) => (
-          <div key={it.label} className="flex flex-col items-center">
+          <div key={it.label} className="flex flex-col items-center px-2">
             {/* connector draws down first… */}
             <motion.span className="w-px origin-top bg-neutral-300 dark:bg-neutral-600"
-              initial={{ height: 0 }} animate={inView ? { height: 24 } : {}}
+              initial={{ height: 0 }} animate={inView ? { height: 20 } : {}}
               transition={{ duration: 0.3, ease: EASE, delay: 0.2 + i * 0.1 }} />
             {/* …then the value fades and slides up, staggered */}
             <motion.div className="mt-2 text-center"
@@ -376,13 +401,13 @@ function HonestyChart() {
 }
 
 const FORECAST = [
-  { d: "Mon", s: "Clear", icon: Sun, tone: "calm" },
+  { d: "Mon", s: "Clear", icon: Moon, tone: "calm" },
   { d: "Tue", s: "Busy", icon: CloudSun, tone: "busy" },
   { d: "Wed", s: "Overloaded", icon: AlertTriangle, tone: "storm" },
   { d: "Thu", s: "Overloaded", icon: AlertTriangle, tone: "storm" },
   { d: "Fri", s: "Busy", icon: CloudSun, tone: "busy" },
-  { d: "Sat", s: "Clear", icon: Sun, tone: "calm" },
-  { d: "Sun", s: "Clear", icon: Sun, tone: "calm" },
+  { d: "Sat", s: "Clear", icon: Moon, tone: "calm" },
+  { d: "Sun", s: "Clear", icon: Moon, tone: "calm" },
 ] as const;
 
 function ForecastCard() {
@@ -471,7 +496,7 @@ function GcalBand() {
           <div className="overflow-hidden rounded-2xl border border-black/10 dark:border-white/10">
             <div className="flex items-center gap-2 bg-neutral-950 px-4 py-2.5 dark:bg-black">
               <Check className="size-4 text-emerald-400" strokeWidth={3} />
-              <span className="text-[12px] font-semibold text-white">TeamTaskPro</span>
+              <span className="text-[12px] font-semibold text-white">TaskTeamPro</span>
             </div>
             <div className="grid grid-cols-[90px_1fr] gap-3 bg-white p-4 dark:bg-neutral-900">
               <div className="space-y-2">
@@ -515,7 +540,7 @@ const FOOTER_COLS: { title: string; links: { label: string; href: string }[] }[]
   {
     title: "Company",
     links: [
-      { label: "Contact us", href: "mailto:hello@teamtaskpro.com" },
+      { label: "Contact us", href: "mailto:hello@taskteampro.com" },
     ],
   },
   {
@@ -549,7 +574,7 @@ function Footer() {
         ))}
       </div>
       <p className="border-t border-black/5 py-6 text-center text-[13px] text-neutral-500 dark:border-white/5 dark:text-neutral-400">
-        © {new Date().getFullYear()} TeamTaskPro. All rights reserved.
+        © {new Date().getFullYear()} TaskTeamPro. All rights reserved.
       </p>
     </footer>
   );
@@ -559,7 +584,7 @@ function Footer() {
 
 export function Landing() {
   return (
-    <div className="min-h-screen bg-[#EEF1F4] text-neutral-950 dark:bg-neutral-950 dark:text-neutral-50">
+    <div className="min-h-screen overflow-x-clip bg-[#EEF1F4] text-neutral-950 dark:bg-neutral-950 dark:text-neutral-50">
       <Nav />
       <Hero />
       <Team />

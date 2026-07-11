@@ -90,7 +90,7 @@ function Footer() {
         ))}
       </div>
       <div className="mx-auto mt-12 flex max-w-6xl flex-col items-center justify-between gap-3 border-t border-border pt-6 sm:flex-row">
-        <p className="text-[13px] text-muted-foreground">© {new Date().getFullYear()} TeamTaskPro. All rights reserved.</p>
+        <p className="text-[13px] text-muted-foreground">© {new Date().getFullYear()} TaskTeamPro. All rights reserved.</p>
         <Link href="/signup" className="text-[13px] font-semibold text-foreground transition hover:opacity-70">Get started →</Link>
       </div>
     </footer>
