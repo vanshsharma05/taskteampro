@@ -96,6 +96,9 @@ export function QuickAdd({ userId, knownCategories, onCreated }: {
       recurrence: parsed.recurrence,
       repeat_days: parsed.recurrence === "weekly" ? parsed.repeat_days : null,
       repeat_dom: parsed.recurrence === "monthly" ? parsed.repeat_dom : null,
+      repeat_every_min: parsed.recurrence === "interval" ? parsed.repeat_every_min : null,
+      window_start: parsed.recurrence === "interval" ? parsed.window_start : null,
+      window_end: parsed.recurrence === "interval" ? parsed.window_end : null,
     };
 
     const supabase = createClient();
@@ -130,9 +133,12 @@ export function QuickAdd({ userId, knownCategories, onCreated }: {
     inputRef.current?.focus();
   }
 
+  const intervalLabel = (min: number) => min % 60 === 0 ? `${min / 60} hr` : `${min} min`;
   const repeatLabel = parsed?.recurrence === "daily" ? "Every day"
     : parsed?.recurrence === "weekly" ? (parsed.repeat_days ?? []).map((d) => DAY_SHORT[d]).join(", ") || "Weekly"
-    : parsed?.recurrence === "monthly" ? `Monthly on the ${parsed.repeat_dom}` : null;
+    : parsed?.recurrence === "monthly" ? `Monthly on the ${parsed.repeat_dom}`
+    : parsed?.recurrence === "interval" && parsed.repeat_every_min
+      ? `Every ${intervalLabel(parsed.repeat_every_min)}, 9 AM–9 PM` : null;
 
   return (
     <div className="mb-5">
