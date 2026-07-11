@@ -8,7 +8,8 @@ import { createClient } from "@/utils/supabase/server";
 // unavailable, so a missing key or an API hiccup never breaks quick add.
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "llama-3.1-8b-instant";
+// 70B gets date arithmetic right where 8B doesn't; still free (~1k req/day)
+const MODEL = "llama-3.3-70b-versatile";
 
 function istToday(): string {
   return new Intl.DateTimeFormat("en-CA", {
