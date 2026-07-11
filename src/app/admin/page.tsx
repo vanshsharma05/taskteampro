@@ -11,11 +11,11 @@ export default async function AdminPage() {
     .from("companies").select("id, name").eq("admin_id", user.id).maybeSingle();
   if (!company) redirect("/onboarding");
 
-  const { data: members } = await supabase
-    .from("profiles").select("id, email").eq("company_id", company.id).neq("id", user.id).order("created_at");
-
-  const { data: tasks } = await supabase
-    .from("tasks").select("*").eq("company_id", company.id);
+  // independent queries — run in parallel instead of stacking round trips
+  const [{ data: members }, { data: tasks }] = await Promise.all([
+    supabase.from("profiles").select("id, email").eq("company_id", company.id).neq("id", user.id).order("created_at"),
+    supabase.from("tasks").select("*").eq("company_id", company.id),
+  ]);
 
   return (
     <AdminDashboard

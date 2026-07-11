@@ -7,16 +7,17 @@ export default async function StaffPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles").select("company_id, role").eq("id", user.id).maybeSingle();
+  // "my company tasks" doesn't need the profile row first — both queries go
+  // out in parallel and we validate membership after
+  const [{ data: profile }, { data: tasks }] = await Promise.all([
+    supabase.from("profiles").select("company_id, role").eq("id", user.id).maybeSingle(),
+    supabase.from("tasks").select("*")
+      .eq("user_id", user.id)
+      .not("company_id", "is", null)
+      .order("due_date", { ascending: true }),
+  ]);
 
   if (!profile?.company_id) redirect("/onboarding");
-
-  const { data: tasks } = await supabase
-    .from("tasks").select("*")
-    .eq("user_id", user.id)
-    .eq("company_id", profile.company_id)
-    .order("due_date", { ascending: true });
 
   return <StaffView userEmail={user.email ?? ""} initialTasks={tasks ?? []} />;
 }
