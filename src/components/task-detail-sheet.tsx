@@ -3,14 +3,15 @@
 import { createElement, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Clock, Repeat, Flag, Trash2, CalendarDays, Plus,
+  X, Clock, Repeat, Flag, Trash2, CalendarDays, Plus, Copy,
   CheckCircle2, Circle, Ban, RotateCcw, AlarmClock,
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/date-picker";
+import { TimePicker } from "@/components/time-picker";
 import {
-  categoryIcon, istToday, isCheckedOn, isSnoozed, isSkippedOn, addDays,
+  DEFAULT_CATEGORIES, categoryIcon, istToday, isCheckedOn, isSnoozed, isSkippedOn, addDays,
   formatTime, formatDateLabel, describeRepeat, formatSnoozeUntil,
   type PersonalTask, type SubTask,
 } from "@/lib/personal";
@@ -33,12 +34,14 @@ function snoozeTarget(minutes: number): string {
 }
 
 export function TaskDetailSheet({
-  task, onClose, onUpdated, onDelete,
+  task, userId, onClose, onUpdated, onDelete, onDuplicated,
 }: {
   task: PersonalTask | null;
+  userId: string;
   onClose: () => void;
   onUpdated: (t: PersonalTask) => void;
   onDelete: (t: PersonalTask) => void;
+  onDuplicated: (t: PersonalTask) => void;
 }) {
   useEffect(() => {
     if (!task) return;
@@ -62,7 +65,7 @@ export function TaskDetailSheet({
             initial={{ y: 40, opacity: 0.6 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}>
             {/* keyed on task id so switching tasks resets local state */}
-            <DetailBody key={task.id} task={task} onClose={onClose} onUpdated={onUpdated} onDelete={onDelete} />
+            <DetailBody key={task.id} task={task} userId={userId} onClose={onClose} onUpdated={onUpdated} onDelete={onDelete} onDuplicated={onDuplicated} />
           </motion.div>
         </motion.div>
       )}
@@ -71,19 +74,24 @@ export function TaskDetailSheet({
 }
 
 function DetailBody({
-  task, onClose, onUpdated, onDelete,
+  task, userId, onClose, onUpdated, onDelete, onDuplicated,
 }: {
   task: PersonalTask;
+  userId: string;
   onClose: () => void;
   onUpdated: (t: PersonalTask) => void;
   onDelete: (t: PersonalTask) => void;
+  onDuplicated: (t: PersonalTask) => void;
 }) {
   const today = istToday();
+  const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.description ?? "");
   const [subtasks, setSubtasks] = useState<SubTask[]>(task.subtasks ?? []);
   const [newSub, setNewSub] = useState("");
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   const checked = isCheckedOn(task, today);
   const snoozed = isSnoozed(task);
@@ -126,6 +134,39 @@ function DetailBody({
     saveSubtasks([...subtasks, { id: crypto.randomUUID(), text, done: false }]);
   }
 
+  async function duplicate() {
+    if (duplicating) return;
+    setDuplicating(true);
+    const { data } = await createClient().from("tasks").insert({
+      user_id: userId,
+      title: `${task.title} (copy)`,
+      description: task.description,
+      category: task.category,
+      importance: task.importance,
+      status: "pending",
+      task_type: "individual",
+      due_date: task.due_date,
+      due_time: task.due_time,
+      recurrence: task.recurrence,
+      repeat_days: task.repeat_days,
+      repeat_dom: task.repeat_dom,
+      repeat_every_min: task.repeat_every_min,
+      window_start: task.window_start,
+      window_end: task.window_end,
+      subtasks: (task.subtasks ?? []).map((s) => ({ ...s, done: false })),
+    }).select().single();
+    setDuplicating(false);
+    if (data) {
+      onDuplicated({
+        ...task, id: data.id, title: data.title,
+        is_done: false, last_done_on: null, completed_at: null,
+        snoozed_until: null, skipped_on: null, google_event_id: null,
+        subtasks: data.subtasks ?? [],
+      });
+      onClose();
+    }
+  }
+
   const actionBtn = (active: boolean, activeCls: string) =>
     cn("inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition active:scale-[0.97]",
       active ? activeCls : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground");
@@ -133,8 +174,17 @@ function DetailBody({
   return (
     <>
       <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
-        <div className="min-w-0">
-          <h2 className={cn("font-heading text-lg font-bold leading-snug", checked && "text-muted-foreground line-through")}>{task.title}</h2>
+        <div className="min-w-0 flex-1">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Task title"
+            onBlur={() => {
+              const v = title.trim();
+              if (v && v !== task.title) patch({ title: v });
+              else setTitle(task.title);
+            }}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+            className={cn("w-full bg-transparent font-heading text-lg font-bold leading-snug outline-none",
+              "rounded-md transition focus:bg-muted/60 focus:px-2 focus:py-0.5",
+              checked && "text-muted-foreground line-through")} />
           <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12px] text-muted-foreground">
             {task.due_date && !task.recurrence && (
               <span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{formatDateLabel(task.due_date, today)}</span>
@@ -244,6 +294,55 @@ function DetailBody({
           </div>
         )}
 
+        {/* time — not for interval reminders, which use a window instead */}
+        {task.recurrence !== "interval" && !checked && (
+          <div className="mt-6">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Time</p>
+            <div className="rounded-2xl border border-border">
+              <button type="button" onClick={() => setShowTimePicker((s) => !s)}
+                className="flex w-full items-center justify-between px-3 py-2.5 text-sm">
+                <span className="flex items-center gap-2 text-muted-foreground"><Clock className="size-4" /> Remind at</span>
+                <span className="font-medium">{task.due_time ? formatTime(task.due_time) : "No time"}</span>
+              </button>
+              {showTimePicker && (
+                <div className="px-2 pb-2">
+                  <TimePicker value={task.due_time} onChange={(t) => patch({ due_time: t })} />
+                  {task.due_time && (
+                    <button type="button" onClick={() => { patch({ due_time: null }); setShowTimePicker(false); }}
+                      className="mt-1.5 w-full rounded-lg px-2 py-1.5 text-center text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground">
+                      Remove time
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* category */}
+        <div className="mt-6">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Category</p>
+          <div className="flex flex-wrap gap-1.5">
+            {DEFAULT_CATEGORIES.map(({ name, Icon }) => {
+              const active = (task.category ?? "").toLowerCase() === name.toLowerCase();
+              return (
+                <button key={name} type="button" onClick={() => patch({ category: active ? null : name })}
+                  className={cn("inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                    active ? "border-foreground bg-foreground text-background"
+                      : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground")}>
+                  <Icon className="size-3.5" /> {name}
+                </button>
+              );
+            })}
+            {task.category && !DEFAULT_CATEGORIES.some((c) => c.name.toLowerCase() === task.category!.toLowerCase()) && (
+              <button type="button" onClick={() => patch({ category: null })}
+                className="inline-flex items-center gap-1.5 rounded-full border border-foreground bg-foreground px-3 py-1.5 text-xs font-medium text-background">
+                {task.category} <X className="size-3" />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* subtasks */}
         <div className="mt-6">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -290,10 +389,14 @@ function DetailBody({
         </div>
       </div>
 
-      <div className="border-t border-border px-5 py-3">
+      <div className="flex items-center justify-between border-t border-border px-5 py-3">
         <button type="button" onClick={() => { onDelete(task); onClose(); }}
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
           <Trash2 className="size-3.5" /> Delete task
+        </button>
+        <button type="button" onClick={duplicate} disabled={duplicating}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50">
+          <Copy className="size-3.5" /> {duplicating ? "Duplicating…" : "Duplicate"}
         </button>
       </div>
     </>

@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Check, Clock, Repeat, Flag, Trash2, Menu, X, LogOut,
   Sun, CalendarDays, CalendarRange, CheckSquare, User, Building2,
-  AlarmClock, Ban, FileText, RefreshCw, type LucideIcon,
+  AlarmClock, Ban, FileText, RefreshCw, Search, ChevronDown, type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import {
   DEFAULT_CATEGORIES, categoryIcon, istToday, occursOn, isCheckedOn,
   isOverdue, isSnoozed, isSkippedOn, subtaskProgress, formatSnoozeUntil,
-  formatTime, formatDateLabel, describeRepeat,
+  formatTime, formatDateLabel, describeRepeat, addDays,
   type PersonalTask,
 } from "@/lib/personal";
 
@@ -33,6 +33,20 @@ function istDateOf(ts: string): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date(ts));
+}
+
+function istHour(): number {
+  return Number(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata", hour: "2-digit", hour12: false,
+  }).format(new Date()));
+}
+
+function greeting(): string {
+  const h = istHour();
+  if (h < 5) return "Up late";
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
 }
 
 function normalize(t: Incoming): PersonalTask {
@@ -73,6 +87,9 @@ export default function TaskBoard({
   const [addDate, setAddDate] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [workHref, setWorkHref] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const gcal = useGoogleCalendar();
 
   const detailTask = detailId ? tasks.find((t) => t.id === detailId) ?? null : null;
@@ -90,15 +107,21 @@ export default function TaskBoard({
     return () => window.clearInterval(id);
   }, []);
 
-  // press "n" anywhere (outside inputs) to add a task
+  // keyboard: "n" adds a task, "/" jumps to search (outside inputs)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "n" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const el = document.activeElement;
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return;
       if (document.body.style.overflow === "hidden") return;   // a sheet is already open
-      e.preventDefault();
-      setAddOpen(true);
+      if (e.key === "n") {
+        e.preventDefault();
+        setAddOpen(true);
+      } else if (e.key === "/") {
+        e.preventDefault();
+        setSearchOpen(true);
+        requestAnimationFrame(() => searchRef.current?.focus());
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -128,7 +151,14 @@ export default function TaskBoard({
     [tasks],
   );
 
-  const inCat = (t: PersonalTask) => !activeCategory || (t.category ?? "") === activeCategory;
+  const q = query.trim().toLowerCase();
+  const inCat = (t: PersonalTask) => {
+    if (activeCategory && (t.category ?? "") !== activeCategory) return false;
+    if (!q) return true;
+    return t.title.toLowerCase().includes(q)
+      || (t.description ?? "").toLowerCase().includes(q)
+      || (t.category ?? "").toLowerCase().includes(q);
+  };
 
   // TODAY buckets
   const activeToday = (t: PersonalTask) => {      // due today (or anytime) and not done
@@ -159,11 +189,11 @@ export default function TaskBoard({
   const upcoming = tasks.filter(inCat)
     .filter((t) => !t.recurrence && t.due_date && t.due_date > today && !t.is_done && !t.skipped_on)
     .sort((a, b) => (a.due_date! < b.due_date! ? -1 : 1));
-  const upcomingByDate = useMemo(() => {
+  const upcomingByDate = (() => {
     const m = new Map<string, PersonalTask[]>();
     for (const t of upcoming) { const k = t.due_date!; if (!m.has(k)) m.set(k, []); m.get(k)!.push(t); }
     return Array.from(m.entries());
-  }, [upcoming]);
+  })();
   const repeating = tasks.filter(inCat).filter((t) => !!t.recurrence);
 
   async function toggleTask(task: PersonalTask) {
@@ -227,6 +257,21 @@ export default function TaskBoard({
     await createClient().from("tasks").update(updates).eq("id", task.id);
   }
 
+  async function moveAllToToday(items: PersonalTask[]) {
+    const ids = items.map((t) => t.id);
+    const updates = { due_date: today, skipped_on: null };
+    setTasks((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, ...updates } : t)));
+    await createClient().from("tasks").update(updates).in("id", ids);
+  }
+
+  // removes finished one-off tasks; repeating tasks reset on their own
+  async function clearCompleted(items: PersonalTask[]) {
+    const ids = items.filter((t) => !t.recurrence).map((t) => t.id);
+    if (ids.length === 0) return;
+    setTasks((prev) => prev.filter((t) => !ids.includes(t.id)));
+    await createClient().from("tasks").delete().in("id", ids);
+  }
+
   async function signOut() {
     await createClient().auth.signOut();
     router.push("/login"); router.refresh();
@@ -241,6 +286,7 @@ export default function TaskBoard({
       activeCategory={activeCategory}
       onCategory={(c) => { setActiveCategory((p) => (p === c ? null : c)); onNavigate?.(); }}
       customCategories={customCategories} counts={counts}
+      todayCount={todo.length + overdue.length} upcomingCount={upcoming.length}
       workHref={workHref} userEmail={userEmail} onSignOut={signOut} onNavigate={onNavigate}
     />
   );
@@ -276,33 +322,67 @@ export default function TaskBoard({
           </button>
           <div>
             <h1 className="font-heading text-xl font-bold tracking-tight">
-              {view === "today" ? "Today" : view === "upcoming" ? "Upcoming" : "Calendar"}
+              {view === "today" ? greeting() : view === "upcoming" ? "Upcoming" : "Calendar"}
             </h1>
             {view === "today" && (
               <p className="text-xs text-muted-foreground">
-                {totalToday === 0 ? "Nothing scheduled" : `${doneCount} of ${totalToday} done`}
+                {totalToday === 0 ? "Nothing scheduled today" : `${doneCount} of ${totalToday} done`}
                 {overdue.length > 0 && <span className="text-red-600 dark:text-red-400"> · {overdue.length} overdue</span>}
                 {snoozed.length > 0 && <span className="text-amber-600 dark:text-amber-400"> · {snoozed.length} snoozed</span>}
               </p>
             )}
           </div>
+          <button onClick={() => {
+            setSearchOpen((s) => {
+              if (s) setQuery("");
+              return !s;
+            });
+            requestAnimationFrame(() => searchRef.current?.focus());
+          }} aria-label="Search tasks" title="Search (/)"
+            className={cn("ml-auto rounded-full p-2 transition",
+              searchOpen || q ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
+            <Search className="size-4" />
+          </button>
           <button onClick={() => setAddOpen(true)} title="New task (n)"
-            className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-sm transition hover:bg-foreground/90 active:scale-[0.97]">
-            <Plus className="size-4" /> Add task
+            className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-sm transition hover:bg-foreground/90 active:scale-[0.97]">
+            <Plus className="size-4" /> <span className="hidden sm:inline">Add task</span><span className="sm:hidden">Add</span>
           </button>
         </header>
 
+        {searchOpen && (
+          <div className="flex items-center gap-2 border-b border-border px-5 py-2">
+            <Search className="size-4 shrink-0 text-muted-foreground" />
+            <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") { setQuery(""); setSearchOpen(false); } }}
+              placeholder="Search tasks, notes, categories…"
+              className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60" />
+            {query && (
+              <button type="button" onClick={() => { setQuery(""); searchRef.current?.focus(); }} aria-label="Clear search"
+                className="rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground">
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-          <div className={cn("mx-auto w-full", view === "calendar" ? "max-w-5xl" : "max-w-2xl")}>
+          <div className={cn("mx-auto w-full", view === "calendar" ? "max-w-5xl" : view === "today" ? "max-w-5xl" : "max-w-2xl")}>
             <Reminders tasks={tasks} />
             {view === "today" && (
-              <>
-                <DailyDigest pending={todo} doneCount={doneToday.length} overdueCount={overdue.length} />
-                <TodayView overdue={overdue} todo={todo} snoozed={snoozed} skipped={skippedToday} doneToday={doneToday}
-                  today={today} onToggle={toggleTask} onDelete={deleteTask} onOpen={(t) => setDetailId(t.id)}
-                  onMoveToToday={moveToToday} onAdd={() => setAddOpen(true)} />
-                <GoogleToday gcal={gcal} events={googleEvents} today={today} />
-              </>
+              <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-6">
+                <div className="mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-none">
+                  <DailyDigest pending={todo} doneCount={doneToday.length} overdueCount={overdue.length} />
+                  <TodayView overdue={overdue} todo={todo} snoozed={snoozed} skipped={skippedToday} doneToday={doneToday}
+                    today={today} onToggle={toggleTask} onDelete={deleteTask} onOpen={(t) => setDetailId(t.id)}
+                    onMoveToToday={moveToToday} onMoveAllToToday={moveAllToToday} onClearCompleted={clearCompleted}
+                    onAdd={() => setAddOpen(true)} />
+                </div>
+                <aside className="mx-auto mt-7 w-full max-w-2xl space-y-4 lg:mx-0 lg:mt-0 lg:max-w-none">
+                  <StatsCard tasks={tasks} today={today}
+                    leftToday={todo.length + overdue.length} doneToday={doneToday.length} />
+                  <GoogleToday gcal={gcal} events={googleEvents} today={today} />
+                </aside>
+              </div>
             )}
             {view === "upcoming" && (
               <UpcomingView byDate={upcomingByDate} repeating={repeating}
@@ -325,8 +405,9 @@ export default function TaskBoard({
         knownCategories={customCategories} initialDate={addDate}
         onCreated={(t) => setTasks((prev) => [t, ...prev])} />
 
-      <TaskDetailSheet task={detailTask} onClose={() => setDetailId(null)}
-        onUpdated={updateTask} onDelete={deleteTask} />
+      <TaskDetailSheet task={detailTask} userId={userId} onClose={() => setDetailId(null)}
+        onUpdated={updateTask} onDelete={deleteTask}
+        onDuplicated={(t) => setTasks((prev) => [t, ...prev])} />
 
       <AnimatePresence>
         {pendingDelete && (
@@ -346,28 +427,104 @@ export default function TaskBoard({
   );
 }
 
-function Section({ title, count, tone, children }: {
-  title: string; count: number; tone?: "red" | "emerald" | "amber"; children: React.ReactNode;
+function Section({ title, count, tone, action, collapsible, defaultOpen = true, children }: {
+  title: string; count: number; tone?: "red" | "emerald" | "amber";
+  action?: React.ReactNode; collapsible?: boolean; defaultOpen?: boolean;
+  children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   const toneCls = tone === "red" ? "text-red-600 dark:text-red-400"
     : tone === "emerald" ? "text-emerald-600 dark:text-emerald-400"
     : tone === "amber" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground";
+  const header = (
+    <>
+      <h2 className={cn("font-heading text-xs font-bold uppercase tracking-wider", toneCls)}>{title}</h2>
+      <span className="text-xs font-semibold tabular-nums text-muted-foreground">{count}</span>
+      {collapsible && <ChevronDown className={cn("size-3.5 text-muted-foreground transition-transform", !open && "-rotate-90")} />}
+    </>
+  );
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-2 px-1">
-        <h2 className={cn("font-heading text-xs font-bold uppercase tracking-wider", toneCls)}>{title}</h2>
-        <span className="text-xs font-semibold tabular-nums text-muted-foreground">{count}</span>
+        {collapsible ? (
+          <button type="button" onClick={() => setOpen((o) => !o)} className="flex items-center gap-2">
+            {header}
+          </button>
+        ) : header}
+        {action && <span className="ml-auto">{action}</span>}
       </div>
-      <div className="space-y-2">{children}</div>
+      {(!collapsible || open) && <div className="space-y-2">{children}</div>}
     </section>
   );
 }
 
-function TodayView({ overdue, todo, snoozed, skipped, doneToday, today, onToggle, onDelete, onOpen, onMoveToToday, onAdd }: {
+/** Small text button in a section header; destructive ones ask once before acting. */
+function SectionAction({ label, confirmLabel, onAct }: {
+  label: string; confirmLabel?: string; onAct: () => void;
+}) {
+  const [arming, setArming] = useState(false);
+  useEffect(() => {
+    if (!arming) return;
+    const id = window.setTimeout(() => setArming(false), 3000);
+    return () => window.clearTimeout(id);
+  }, [arming]);
+  return (
+    <button type="button"
+      onClick={() => {
+        if (confirmLabel && !arming) { setArming(true); return; }
+        setArming(false);
+        onAct();
+      }}
+      className={cn("rounded-full border px-2.5 py-1 text-[11px] font-semibold transition",
+        arming ? "border-red-300 bg-red-50 text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-400"
+          : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground")}>
+      {arming ? confirmLabel : label}
+    </button>
+  );
+}
+
+function StatsCard({ tasks, today, leftToday, doneToday }: {
+  tasks: PersonalTask[]; today: string; leftToday: number; doneToday: number;
+}) {
+  const weekAgo = addDays(today, -6);
+  const doneThisWeek = tasks.filter((t) =>
+    t.recurrence
+      ? !!t.last_done_on && t.last_done_on >= weekAgo && t.last_done_on <= today
+      : !!t.completed_at && istDateOf(t.completed_at) >= weekAgo,
+  ).length;
+  const repeating = tasks.filter((t) => !!t.recurrence).length;
+
+  const tiles: { label: string; value: number }[] = [
+    { label: "Left today", value: leftToday },
+    { label: "Done today", value: doneToday },
+    { label: "Done · 7 days", value: doneThisWeek },
+    { label: "Repeating", value: repeating },
+  ];
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <h2 className="font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">Snapshot</h2>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        {tiles.map(({ label, value }) => (
+          <div key={label}>
+            <p className="font-heading text-2xl font-bold tabular-nums leading-none">{value}</p>
+            <p className="mt-1 text-[11px] font-medium text-muted-foreground">{label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TodayView({
+  overdue, todo, snoozed, skipped, doneToday, today,
+  onToggle, onDelete, onOpen, onMoveToToday, onMoveAllToToday, onClearCompleted, onAdd,
+}: {
   overdue: PersonalTask[]; todo: PersonalTask[]; snoozed: PersonalTask[]; skipped: PersonalTask[];
   doneToday: PersonalTask[]; today: string;
   onToggle: (t: PersonalTask) => void; onDelete: (t: PersonalTask) => void;
-  onOpen: (t: PersonalTask) => void; onMoveToToday: (t: PersonalTask) => void; onAdd: () => void;
+  onOpen: (t: PersonalTask) => void; onMoveToToday: (t: PersonalTask) => void;
+  onMoveAllToToday: (ts: PersonalTask[]) => void; onClearCompleted: (ts: PersonalTask[]) => void;
+  onAdd: () => void;
 }) {
   if (overdue.length + todo.length + snoozed.length + skipped.length + doneToday.length === 0) {
     return (
@@ -384,7 +541,8 @@ function TodayView({ overdue, todo, snoozed, skipped, doneToday, today, onToggle
   return (
     <div className="space-y-7">
       {overdue.length > 0 && (
-        <Section title="Overdue" tone="red" count={overdue.length}>
+        <Section title="Overdue" tone="red" count={overdue.length}
+          action={overdue.length > 1 && <SectionAction label="Move all to today" onAct={() => onMoveAllToToday(overdue)} />}>
           {overdue.map((t) => <TaskItem key={t.id} task={t} today={today} icon={categoryIcon(t.category)} onToggle={() => onToggle(t)} onDelete={() => onDelete(t)} onOpen={() => onOpen(t)} onMoveToToday={() => onMoveToToday(t)} />)}
         </Section>
       )}
@@ -404,7 +562,10 @@ function TodayView({ overdue, todo, snoozed, skipped, doneToday, today, onToggle
         </Section>
       )}
       {doneToday.length > 0 && (
-        <Section title="Completed" tone="emerald" count={doneToday.length}>
+        <Section title="Completed" tone="emerald" count={doneToday.length}
+          collapsible defaultOpen={doneToday.length <= 5}
+          action={doneToday.some((t) => !t.recurrence) &&
+            <SectionAction label="Clear" confirmLabel="Delete for good?" onAct={() => onClearCompleted(doneToday)} />}>
           {doneToday.map((t) => <TaskItem key={t.id} task={t} today={today} icon={categoryIcon(t.category)} onToggle={() => onToggle(t)} onDelete={() => onDelete(t)} onOpen={() => onOpen(t)} />)}
         </Section>
       )}
@@ -514,7 +675,7 @@ function GoogleToday({ gcal, events, today }: {
   if (!gcal.available) return null;
   if (!gcal.connected) {
     return (
-      <div className="mt-7 flex items-center gap-3 rounded-2xl border border-dashed border-border px-4 py-3">
+      <div className="flex items-center gap-3 rounded-2xl border border-dashed border-border px-4 py-3">
         <div className="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-indigo-600 dark:text-indigo-400">
           <CalendarDays className="size-4" />
         </div>
@@ -531,7 +692,7 @@ function GoogleToday({ gcal, events, today }: {
   }
   const todaysEvents = events.filter((e) => e.date === today);
   return (
-    <div className="mt-7 space-y-2">
+    <div className="space-y-2">
       <div className="flex items-center gap-2 px-1">
         <h2 className="font-heading text-xs font-bold uppercase tracking-wider text-muted-foreground">Google Calendar</h2>
         <span className="text-xs font-semibold tabular-nums text-muted-foreground">{todaysEvents.length}</span>
@@ -595,10 +756,12 @@ function GoogleConnectCard({ gcal }: { gcal: ReturnType<typeof useGoogleCalendar
 }
 
 function BoardSidebar({
-  view, onView, activeCategory, onCategory, customCategories, counts, workHref, userEmail, onSignOut, onNavigate,
+  view, onView, activeCategory, onCategory, customCategories, counts,
+  todayCount, upcomingCount, workHref, userEmail, onSignOut, onNavigate,
 }: {
   view: View; onView: (v: View) => void; activeCategory: string | null; onCategory: (c: string) => void;
-  customCategories: string[]; counts: Record<string, number>; workHref: string | null;
+  customCategories: string[]; counts: Record<string, number>;
+  todayCount: number; upcomingCount: number; workHref: string | null;
   userEmail: string; onSignOut: () => void; onNavigate?: () => void;
 }) {
   const cats = [
@@ -624,8 +787,8 @@ function BoardSidebar({
 
       <nav className={cn("space-y-1", workHref ? "mt-6" : "mt-7")}>
         <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Menu</p>
-        <NavBtn active={view === "today"} onClick={() => onView("today")} icon={Sun} label="Today" />
-        <NavBtn active={view === "upcoming"} onClick={() => onView("upcoming")} icon={CalendarDays} label="Upcoming" />
+        <NavBtn active={view === "today"} onClick={() => onView("today")} icon={Sun} label="Today" badge={todayCount} />
+        <NavBtn active={view === "upcoming"} onClick={() => onView("upcoming")} icon={CalendarDays} label="Upcoming" badge={upcomingCount} />
         <NavBtn active={view === "calendar"} onClick={() => onView("calendar")} icon={CalendarRange} label="Calendar" />
       </nav>
 
@@ -654,14 +817,21 @@ function BoardSidebar({
   );
 }
 
-function NavBtn({ active, onClick, icon: Icon, label }: {
-  active: boolean; onClick: () => void; icon: typeof Sun; label: string;
+function NavBtn({ active, onClick, icon: Icon, label, badge }: {
+  active: boolean; onClick: () => void; icon: typeof Sun; label: string; badge?: number;
 }) {
   return (
     <button onClick={onClick}
       className={cn("flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition",
         active ? "bg-foreground text-background shadow-sm" : "text-muted-foreground hover:bg-accent/60")}>
-      <Icon className="size-4" /> {label}
+      <Icon className="size-4" />
+      <span className="flex-1 text-left">{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className={cn("rounded-full px-1.5 text-[11px] font-semibold tabular-nums",
+          active ? "bg-background/20 text-background" : "bg-muted text-muted-foreground")}>
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
