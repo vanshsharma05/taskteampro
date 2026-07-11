@@ -12,6 +12,7 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AddTaskSheet } from "@/components/add-task-sheet";
+import { QuickAdd } from "@/components/quick-add";
 import { TaskDetailSheet } from "@/components/task-detail-sheet";
 import { DailyDigest } from "@/components/daily-digest";
 import { CalendarGrid } from "@/components/calendar-grid";
@@ -371,6 +372,8 @@ export default function TaskBoard({
             {view === "today" && (
               <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-6">
                 <div className="mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-none">
+                  <QuickAdd userId={userId} knownCategories={customCategories}
+                    onCreated={(t) => setTasks((prev) => [t, ...prev])} />
                   <DailyDigest pending={todo} doneCount={doneToday.length} overdueCount={overdue.length} />
                   <TodayView overdue={overdue} todo={todo} snoozed={snoozed} skipped={skippedToday} doneToday={doneToday}
                     today={today} onToggle={toggleTask} onDelete={deleteTask} onOpen={(t) => setDetailId(t.id)}
