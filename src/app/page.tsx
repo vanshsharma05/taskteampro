@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Landing } from "@/components/landing";
 
 export const metadata: Metadata = {
-  title: "TeamTaskPro — Know your team's work is getting done",
+  title: "TeamTaskPro — Finally. An honest planner.",
   description:
-    "Assign work, track it, and see exactly who's on top of things. Task accountability built for small business teams.",
+    "Spoken capture, smart scheduling, and accountability insights that keep you on track. Plan visually. Live realistically.",
 };
 
 export default function HomePage() {
