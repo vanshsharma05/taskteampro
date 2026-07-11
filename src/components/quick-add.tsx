@@ -4,12 +4,32 @@ import { useEffect, useRef, useState } from "react";
 import { Mic, Plus, CalendarDays, Clock, Repeat, Flag, Tag, CornerDownLeft } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { cn } from "@/lib/utils";
-import { parseQuickAdd } from "@/lib/quick-add";
+import { parseQuickAdd, type ParsedTask } from "@/lib/quick-add";
 import { hasGoogleToken, createGoogleEvent } from "@/lib/google-calendar";
 import {
-  istToday, formatTime, formatDateLabel,
+  DEFAULT_CATEGORIES, istToday, formatTime, formatDateLabel,
   type PersonalTask,
 } from "@/lib/personal";
+
+/**
+ * Server-side AI parse (Claude). Returns null on any failure so the caller
+ * can fall back to the on-device parser — quick add never hard-fails.
+ */
+async function aiParse(text: string, categories: string[]): Promise<ParsedTask | null> {
+  try {
+    const res = await fetch("/api/parse-task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, categories }),
+      signal: AbortSignal.timeout(9_000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.task && typeof data.task.title === "string" && data.task.title ? data.task as ParsedTask : null;
+  } catch {
+    return null;
+  }
+}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type SpeechRec = {
@@ -83,22 +103,26 @@ export function QuickAdd({ userId, knownCategories, onCreated }: {
     setSaving(true);
     setError(null);
 
+    // AI understands messier phrasing; the local parse is the safety net
+    const allCategories = [...DEFAULT_CATEGORIES.map((c) => c.name), ...knownCategories];
+    const final = (await aiParse(text, allCategories)) ?? parsed;
+
     const payload = {
       user_id: userId,
-      title: parsed.title,
+      title: final.title,
       description: null,
-      importance: parsed.importance,
+      importance: final.importance,
       status: "pending",
-      category: parsed.category,
+      category: final.category,
       task_type: "individual",
-      due_date: parsed.due_date,
-      due_time: parsed.due_time,
-      recurrence: parsed.recurrence,
-      repeat_days: parsed.recurrence === "weekly" ? parsed.repeat_days : null,
-      repeat_dom: parsed.recurrence === "monthly" ? parsed.repeat_dom : null,
-      repeat_every_min: parsed.recurrence === "interval" ? parsed.repeat_every_min : null,
-      window_start: parsed.recurrence === "interval" ? parsed.window_start : null,
-      window_end: parsed.recurrence === "interval" ? parsed.window_end : null,
+      due_date: final.due_date,
+      due_time: final.due_time,
+      recurrence: final.recurrence,
+      repeat_days: final.recurrence === "weekly" ? final.repeat_days : null,
+      repeat_dom: final.recurrence === "monthly" ? final.repeat_dom : null,
+      repeat_every_min: final.recurrence === "interval" ? final.repeat_every_min : null,
+      window_start: final.recurrence === "interval" ? final.window_start : null,
+      window_end: final.recurrence === "interval" ? final.window_end : null,
     };
 
     const supabase = createClient();
@@ -110,10 +134,10 @@ export function QuickAdd({ userId, knownCategories, onCreated }: {
     }
 
     let googleEventId: string | null = null;
-    if (hasGoogleToken() && !parsed.recurrence && parsed.due_date) {
+    if (hasGoogleToken() && !final.recurrence && final.due_date) {
       try {
         googleEventId = await createGoogleEvent({
-          title: data.title, date: parsed.due_date, time: parsed.due_time, description: null,
+          title: data.title, date: final.due_date, time: final.due_time, description: null,
         });
         await supabase.from("tasks").update({ google_event_id: googleEventId }).eq("id", data.id);
       } catch { /* Google hiccup shouldn't block the task */ }
