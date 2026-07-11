@@ -19,7 +19,9 @@ export default async function AdminPage() {
 
   return (
     <AdminDashboard
+      adminId={user.id}
       userEmail={user.email ?? ""}
+      companyId={company.id}
       companyName={company.name}
       members={members ?? []}
       tasks={tasks ?? []}
