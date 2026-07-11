@@ -40,6 +40,46 @@ export function hasGoogleToken(): boolean {
   return getStoredToken() !== null;
 }
 
+const LINKED_KEY = "gcal_linked";
+
+/** True when we hold a live token OR the account has a server-side refresh token. */
+export function isGoogleConnected(): boolean {
+  if (hasGoogleToken()) return true;
+  try { return localStorage.getItem(LINKED_KEY) === "1"; } catch { return false; }
+}
+
+function markLinked(linked: boolean): void {
+  try {
+    if (linked) localStorage.setItem(LINKED_KEY, "1");
+    else localStorage.removeItem(LINKED_KEY);
+  } catch { /* ignore */ }
+}
+
+function storeToken(token: string, expiresInSec: number): void {
+  const stored: StoredToken = { token, expiresAt: Date.now() + Math.max(60, expiresInSec - 120) * 1000 };
+  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored)); } catch { /* ignore */ }
+  markLinked(true);
+}
+
+/**
+ * Returns a usable access token: the stored one if still valid, otherwise a
+ * fresh one minted server-side from the user's refresh token. Null when the
+ * account isn't linked (or refresh is unavailable).
+ */
+export async function getAccessToken(): Promise<string | null> {
+  const stored = getStoredToken();
+  if (stored) return stored;
+  try {
+    const res = await fetch("/api/google-token");
+    if (res.status === 404) { markLinked(false); return null; }
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (typeof data?.access_token !== "string") return null;
+    storeToken(data.access_token, Number(data.expires_in) || 3600);
+    return data.access_token;
+  } catch { return null; }
+}
+
 /**
  * Picks up a Google access token forwarded by /auth/callback in the URL hash
  * after "Continue with Google" login, stores it, and cleans the URL.
@@ -56,12 +96,16 @@ export function adoptTokenFromUrlHash(): boolean {
     if (!token) return false;
     const stored: StoredToken = { token, expiresAt: Number.isFinite(exp) && exp > Date.now() ? exp : Date.now() + 3500_000 };
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    markLinked(true);
     return true;
   } catch { return false; }
 }
 
 export function disconnectGoogle(): void {
   try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  markLinked(false);
+  // best-effort: forget the server-side refresh token too
+  void fetch("/api/google-token", { method: "DELETE" }).catch(() => { /* ignore */ });
 }
 
 function loadGsi(): Promise<void> {
@@ -91,11 +135,7 @@ export async function connectGoogle(): Promise<string> {
       scope: SCOPE,
       callback: (resp: { access_token?: string; expires_in?: number; error?: string }) => {
         if (resp.error || !resp.access_token) return reject(new Error(resp.error ?? "No token granted"));
-        const stored: StoredToken = {
-          token: resp.access_token,
-          expiresAt: Date.now() + (resp.expires_in ?? 3600) * 1000,
-        };
-        try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored)); } catch { /* ignore */ }
+        storeToken(resp.access_token, resp.expires_in ?? 3600);
         resolve(resp.access_token);
       },
     });
@@ -139,7 +179,7 @@ function nextDay(dateStr: string): string {
 export async function createGoogleEvent(opts: {
   title: string; date: string; time?: string | null; description?: string | null;
 }): Promise<string> {
-  const token = getStoredToken();
+  const token = await getAccessToken();
   if (!token) throw new Error("Not connected to Google");
 
   const body = opts.time
@@ -169,7 +209,7 @@ export async function createGoogleEvent(opts: {
 
 /** Best-effort delete of a pushed event from the primary calendar. */
 export async function deleteGoogleEvent(eventId: string): Promise<void> {
-  const token = getStoredToken();
+  const token = await getAccessToken();
   if (!token) return;
   try {
     await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`, {
@@ -181,7 +221,7 @@ export async function deleteGoogleEvent(eventId: string): Promise<void> {
 
 /** Fetches events across all the user's calendars for the given window. */
 export async function fetchGoogleEvents(timeMin: Date, timeMax: Date): Promise<GoogleEvent[]> {
-  const token = getStoredToken();
+  const token = await getAccessToken();
   if (!token) throw new Error("Not connected to Google");
 
   const list = await gFetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", token);

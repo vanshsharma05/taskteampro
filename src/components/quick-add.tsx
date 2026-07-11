@@ -5,7 +5,7 @@ import { Mic, Plus, CalendarDays, Clock, Repeat, Flag, Tag, CornerDownLeft } fro
 import { createClient } from "@/utils/supabase/client";
 import { cn } from "@/lib/utils";
 import { parseQuickAdd, type ParsedTask } from "@/lib/quick-add";
-import { hasGoogleToken, createGoogleEvent } from "@/lib/google-calendar";
+import { isGoogleConnected, createGoogleEvent } from "@/lib/google-calendar";
 import {
   DEFAULT_CATEGORIES, istToday, formatTime, formatDateLabel,
   type PersonalTask,
@@ -134,7 +134,7 @@ export function QuickAdd({ userId, knownCategories, onCreated }: {
     }
 
     let googleEventId: string | null = null;
-    if (hasGoogleToken() && !final.recurrence && final.due_date) {
+    if (isGoogleConnected() && !final.recurrence && final.due_date) {
       try {
         googleEventId = await createGoogleEvent({
           title: data.title, date: final.due_date, time: final.due_time, description: null,

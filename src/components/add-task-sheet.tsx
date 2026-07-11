@@ -11,7 +11,7 @@ import {
 } from "@/lib/personal";
 import { DatePicker } from "@/components/date-picker";
 import { TimePicker } from "@/components/time-picker";
-import { hasGoogleToken, createGoogleEvent } from "@/lib/google-calendar";
+import { isGoogleConnected, createGoogleEvent } from "@/lib/google-calendar";
 
 type Repeat = "none" | "daily" | "weekly" | "monthly" | "interval";
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -97,7 +97,7 @@ function AddTaskForm({
   const [error, setError] = useState<string | null>(null);
 
   // push one-off dated tasks to Google Calendar when connected
-  const [gcalConnected] = useState(() => hasGoogleToken());
+  const [gcalConnected] = useState(() => isGoogleConnected());
   const [addToGcal, setAddToGcal] = useState(true);
   const canPushToGcal = gcalConnected && repeat === "none" && !!dueDate;
 

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   GOOGLE_CLIENT_ID, adoptTokenFromUrlHash, connectGoogle, disconnectGoogle,
-  fetchGoogleEvents, hasGoogleToken, type GoogleEvent,
+  fetchGoogleEvents, getAccessToken, hasGoogleToken, type GoogleEvent,
 } from "@/lib/google-calendar";
 
 /** Google Calendar events from a week back to two months ahead. */
@@ -27,16 +27,17 @@ export function useGoogleCalendar() {
     }
   }, []);
 
-  // adopt a token handed over by Google login, or resume an existing one
+  // adopt a token handed over by Google login, resume an existing one,
+  // or silently mint a fresh one from the server-side refresh token
   useEffect(() => {
     adoptTokenFromUrlHash();
-    if (!hasGoogleToken()) return;
     let cancelled = false;
-    queueMicrotask(() => {
-      if (cancelled) return;
+    void (async () => {
+      const token = hasGoogleToken() ? "stored" : await getAccessToken();
+      if (cancelled || !token) return;
       setConnected(true);
-      void refresh();
-    });
+      await refresh();
+    })();
     return () => { cancelled = true; };
   }, [refresh]);
 

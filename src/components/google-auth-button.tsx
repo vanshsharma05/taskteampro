@@ -19,6 +19,9 @@ export function GoogleAuthButton() {
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
         scopes: CALENDAR_SCOPES,
+        // offline + consent make Google issue a refresh token, so calendar
+        // sync keeps working after the 1-hour access token expires
+        queryParams: { access_type: "offline", prompt: "consent" },
       },
     });
     if (error) { setError(error.message); setLoading(false); }

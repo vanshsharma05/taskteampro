@@ -14,6 +14,18 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       const safeNext = next.startsWith("/") ? next : "/onboarding";
+
+      // keep the refresh token so /api/google-token can mint new access
+      // tokens after the 1-hour one from login expires
+      const refreshToken = data.session?.provider_refresh_token;
+      if (refreshToken && data.session?.user) {
+        await supabase.from("google_tokens").upsert({
+          user_id: data.session.user.id,
+          refresh_token: refreshToken,
+          updated_at: new Date().toISOString(),
+        });
+      }
+
       const providerToken = data.session?.provider_token;
       if (providerToken) {
         // land on a client page that stores the token BEFORE any further
