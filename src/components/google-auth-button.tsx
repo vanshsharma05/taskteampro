@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 
-const CALENDAR_SCOPES =
-  "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events";
-
-/** "Continue with Google" — signs in via Supabase and grants calendar access in one go. */
+/**
+ * "Continue with Google" — plain sign-in (email/profile only, no sensitive
+ * scopes, no verification warning). Calendar access is granted separately
+ * via the Connect flow (/api/google-oauth/start).
+ */
 export function GoogleAuthButton() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,10 +19,6 @@ export function GoogleAuthButton() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
-        scopes: CALENDAR_SCOPES,
-        // offline + consent make Google issue a refresh token, so calendar
-        // sync keeps working after the 1-hour access token expires
-        queryParams: { access_type: "offline", prompt: "consent" },
       },
     });
     if (error) { setError(error.message); setLoading(false); }
