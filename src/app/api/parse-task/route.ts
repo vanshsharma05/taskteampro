@@ -1,27 +1,14 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/utils/supabase/server";
 
 // AI-powered task parsing: one casual sentence in, a structured task out.
+// Runs Llama 3.1 (open-source) on Groq's free tier — get a key at
+// https://console.groq.com (no card needed) and set GROQ_API_KEY.
 // The client falls back to the on-device parser if this route is
-// unavailable, so a missing key or a Claude hiccup never breaks quick add.
+// unavailable, so a missing key or an API hiccup never breaks quick add.
 
-const TASK_SCHEMA = {
-  type: "object",
-  properties: {
-    title: { type: "string", description: "Short imperative task title, filler words removed" },
-    due_date: { type: ["string", "null"], description: "YYYY-MM-DD, null if no date or recurring" },
-    due_time: { type: ["string", "null"], description: "HH:MM 24h, null if none" },
-    recurrence: { type: ["string", "null"], enum: ["daily", "weekly", "monthly", "interval", null] },
-    repeat_days: { type: ["array", "null"], items: { type: "integer" }, description: "Weekdays 0=Sunday..6=Saturday, only for weekly" },
-    repeat_dom: { type: ["integer", "null"], description: "Day of month 1-31, only for monthly" },
-    repeat_every_min: { type: ["integer", "null"], description: "Minutes between reminders, only for interval (15-240)" },
-    importance: { type: "string", enum: ["normal", "high"] },
-    category: { type: ["string", "null"], description: "One of the known categories, or null" },
-  },
-  required: ["title", "due_date", "due_time", "recurrence", "repeat_days", "repeat_dom", "repeat_every_min", "importance", "category"],
-  additionalProperties: false,
-} as const;
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL = "llama-3.1-8b-instant";
 
 function istToday(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -34,11 +21,23 @@ function buildSystem(categories: string[]): string {
 Today is ${istToday()} in the Asia/Kolkata timezone.
 Known categories: ${categories.join(", ")}.
 
+Respond with ONLY a JSON object, no other text, in exactly this shape:
+{
+  "title": string,                     // what the user needs to DO — scheduling words and filler ("remind me to", "please") removed
+  "due_date": string | null,           // "YYYY-MM-DD"; null if recurring
+  "due_time": string | null,           // "HH:MM" 24-hour; null if none
+  "recurrence": "daily" | "weekly" | "monthly" | "interval" | null,
+  "repeat_days": number[] | null,      // weekdays 0=Sunday..6=Saturday, only for weekly
+  "repeat_dom": number | null,         // day of month 1-31, only for monthly
+  "repeat_every_min": number | null,   // minutes between reminders 15-240, only for interval
+  "importance": "normal" | "high",
+  "category": string | null            // one of the known categories, or null
+}
+
 Rules:
-- The title is what the user needs to DO, with scheduling words and filler ("remind me to", "please") removed. Keep it short and natural.
 - Resolve relative dates ("tomorrow", "next friday", "in 3 days") against today's date. If a stated date already passed this year, use next year.
-- One-off tasks default to today when no date is given. Recurring tasks have due_date null.
-- "every half hour" / "every 2 hours" style requests are recurrence "interval" with repeat_every_min (clamp 15-240). Interval tasks have due_time null.
+- One-off tasks default to today's date when no date is given. Recurring tasks have due_date null.
+- "every half hour" / "every 2 hours" style requests are recurrence "interval" with repeat_every_min. Interval tasks have due_time null.
 - Words like "urgent", "important", "asap" mean importance "high".
 - Pick a category only when the task clearly fits one; otherwise null.
 - Times with no am/pm: 1-7 usually mean afternoon/evening (add 12), 8-12 mean morning.`;
@@ -78,11 +77,11 @@ function sanitize(raw: any, categories: string[]) {
 }
 
 export async function POST(request: Request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.GROQ_API_KEY) {
     return NextResponse.json({ error: "AI parsing is not configured" }, { status: 503 });
   }
 
-  // signed-in users only — this endpoint spends API credits
+  // signed-in users only — this endpoint spends the free-tier quota
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in to use AI parsing" }, { status: 401 });
@@ -97,20 +96,29 @@ export async function POST(request: Request) {
   }
 
   try {
-    const client = new Anthropic({ timeout: 8_000, maxRetries: 1 });
-    const response = await client.messages.create({
-      model: "claude-opus-4-8",
-      max_tokens: 1024,
-      system: buildSystem(categories),
-      output_config: { format: { type: "json_schema", schema: TASK_SCHEMA } },
-      messages: [{ role: "user", content: text }],
+    const res = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        temperature: 0,
+        max_tokens: 512,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: buildSystem(categories) },
+          { role: "user", content: text },
+        ],
+      }),
+      signal: AbortSignal.timeout(8_000),
     });
+    if (!res.ok) throw new Error(`Groq API error ${res.status}`);
 
-    if (response.stop_reason === "refusal") {
-      return NextResponse.json({ error: "Could not parse that sentence" }, { status: 422 });
-    }
-    const block = response.content.find((b) => b.type === "text");
-    const task = block ? sanitize(JSON.parse(block.text), categories) : null;
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content;
+    const task = typeof content === "string" ? sanitize(JSON.parse(content), categories) : null;
     if (!task) return NextResponse.json({ error: "Could not parse that sentence" }, { status: 422 });
 
     return NextResponse.json({ task });
