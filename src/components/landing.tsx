@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
-import { Mic, Moon, CloudSun, AlertTriangle, Clock, Check } from "lucide-react";
+import {
+  Mic, Moon, CloudSun, AlertTriangle, Clock, Check,
+  ChevronDown, ChevronLeft, ChevronRight, PanelLeft,
+  CalendarDays, Settings, ClipboardList,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -14,6 +18,9 @@ import { cn } from "@/lib/utils";
  */
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+
+// the comp's green is a muted jade, softer than tailwind emerald
+const GREEN = "bg-[#3D9E77] hover:bg-[#348A67]";
 
 const reveal = {
   hidden: { opacity: 0, y: 30 },
@@ -38,22 +45,26 @@ function Nav() {
   return (
     <header className="sticky top-0 z-40 px-3 pt-3">
       {/* floating white bar per comp */}
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between rounded-2xl bg-white px-4 shadow-sm shadow-black/5 sm:px-6 dark:bg-neutral-900">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between rounded-2xl bg-white px-4 shadow-sm shadow-black/5 sm:h-[68px] sm:px-7 dark:bg-neutral-900">
         {/* text-only logo per design note — no mark in the nav */}
-        <Link href="/" className="font-heading text-lg font-semibold tracking-tight">
-          TaskTeam<span className="text-emerald-600 dark:text-emerald-400">Pro</span>
+        <Link href="/" className="font-heading text-xl font-bold tracking-tight">
+          TaskTeamPro
         </Link>
-        <nav className="hidden items-center gap-7 text-sm font-medium text-neutral-600 md:flex dark:text-neutral-300">
-          <a href="#task" className="transition-colors hover:text-neutral-950 dark:hover:text-white">Product</a>
-          <a href="#team" className="transition-colors hover:text-neutral-950 dark:hover:text-white">Use cases</a>
+        <nav className="hidden items-center gap-8 text-[15px] font-medium text-neutral-800 md:flex dark:text-neutral-200">
+          <a href="#task" className="flex items-center gap-1 transition-colors hover:text-neutral-500 dark:hover:text-white">
+            Product <ChevronDown className="size-4 text-neutral-500" />
+          </a>
+          <a href="#team" className="flex items-center gap-1 transition-colors hover:text-neutral-500 dark:hover:text-white">
+            Use Cases <ChevronDown className="size-4 text-neutral-500" />
+          </a>
         </nav>
-        <div className="flex items-center gap-1.5 sm:gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-4">
           <Link href="/login"
-            className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-neutral-700 transition-colors hover:text-neutral-950 sm:px-4 dark:text-neutral-300 dark:hover:text-white">
+            className="flex min-h-11 items-center rounded-lg px-2 text-[15px] font-medium text-neutral-800 transition-colors hover:text-neutral-500 sm:px-3 dark:text-neutral-200 dark:hover:text-white">
             Log in
           </Link>
           <Link href="/signup"
-            className="flex min-h-11 items-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 sm:px-5">
+            className={cn("flex min-h-12 items-center rounded-xl px-5 text-[15px] font-semibold text-white shadow-sm transition-colors sm:px-7", GREEN)}>
             Get started
           </Link>
         </div>
@@ -64,70 +75,109 @@ function Nav() {
 
 /* ---------------------------------- hero --------------------------------- */
 
+const SIDEBAR_ITEMS = [
+  { label: "Today", icon: CalendarDays, active: true },
+  { label: "Upcoming", icon: Clock, active: false },
+  { label: "Tasks", icon: ClipboardList, active: false },
+  { label: "Settings", icon: Settings, active: false },
+];
+
 function AppMock() {
   return (
     <div className="relative">
       <div className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-xl shadow-black/5 dark:border-white/10 dark:bg-neutral-900">
-        {/* browser chrome */}
-        <div className="flex items-center gap-2 border-b border-black/5 px-4 py-2.5 dark:border-white/5">
-          <span className="size-2.5 rounded-full bg-neutral-300 dark:bg-neutral-700" />
-          <span className="size-2.5 rounded-full bg-neutral-300 dark:bg-neutral-700" />
-          <span className="size-2.5 rounded-full bg-neutral-300 dark:bg-neutral-700" />
-          <div className="ml-3 h-5 flex-1 rounded-md bg-neutral-100 dark:bg-neutral-800" />
+        {/* browser chrome: dots, panel toggle, back/forward, url bar */}
+        <div className="flex items-center gap-3 border-b border-black/5 px-5 py-3 text-neutral-400 dark:border-white/5">
+          <span className="flex gap-1.5">
+            <span className="size-3 rounded-full bg-neutral-300 dark:bg-neutral-700" />
+            <span className="size-3 rounded-full bg-neutral-300 dark:bg-neutral-700" />
+            <span className="size-3 rounded-full bg-neutral-300 dark:bg-neutral-700" />
+          </span>
+          <PanelLeft className="size-4" />
+          <ChevronLeft className="size-4" />
+          <ChevronRight className="size-4" />
+          <div className="ml-2 h-7 flex-1 rounded-lg border border-black/5 bg-neutral-50 dark:border-white/5 dark:bg-neutral-800" />
         </div>
         <div className="flex">
-          {/* mini sidebar */}
-          <div className="hidden w-32 shrink-0 border-r border-black/5 p-3 sm:block dark:border-white/5">
-            <div className="mb-4 flex size-6 items-center justify-center rounded-md bg-neutral-950 dark:bg-white">
-              <Check className="size-3.5 text-emerald-400 dark:text-emerald-600" strokeWidth={3} />
-            </div>
-            {["Today", "Upcoming", "Calendar", "Settings"].map((l, i) => (
-              <div key={l} className={cn("mb-1 rounded-md px-2 py-1.5 text-[11px] font-medium",
-                i === 0 ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-white" : "text-neutral-400 dark:text-neutral-500")}>
-                {l}
+          {/* sidebar with icons, like the comp */}
+          <div className="hidden w-40 shrink-0 border-r border-black/5 p-4 sm:block dark:border-white/5">
+            <svg viewBox="0 0 512 512" className="mb-5 size-8" aria-hidden>
+              <circle cx="252" cy="262" r="140" fill="none" stroke="currentColor" strokeWidth="30" className="text-neutral-800 dark:text-neutral-200" />
+              <path d="M192 208 L248 270 L376 120" fill="none" stroke="#fff" strokeWidth="86" strokeLinecap="round" strokeLinejoin="round" className="stroke-white dark:stroke-neutral-900" />
+              <path d="M192 208 L248 270 L376 120" fill="none" stroke="currentColor" strokeWidth="42" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-800 dark:text-neutral-200" />
+            </svg>
+            {SIDEBAR_ITEMS.map(({ label, icon: Icon, active }) => (
+              <div key={label} className={cn("mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium",
+                active ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-white" : "text-neutral-500 dark:text-neutral-400")}>
+                <Icon className="size-3.5" /> {label}
               </div>
             ))}
           </div>
           {/* content */}
-          <div className="flex flex-1 gap-4 p-4">
-            <div className="min-w-0 flex-1">
-              <p className="mb-3 font-heading text-sm font-bold">Today</p>
-              {[
-                { t: "Pay electricity bill", m: "5:15 PM IST", done: false },
-                { t: "Team standup", m: "Done · 30 min", done: true },
-                { t: "Write launch post", m: "6:30 PM IST", done: false },
-              ].map((r) => (
-                <div key={r.t} className={cn("mb-2 flex items-center gap-2.5 rounded-xl border px-3 py-2.5",
-                  r.done ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/25 dark:bg-emerald-500/10"
-                    : "border-black/5 bg-neutral-50 dark:border-white/5 dark:bg-neutral-800/60")}>
-                  <span className={cn("grid size-4 shrink-0 place-items-center rounded-full border-2",
-                    r.done ? "border-emerald-500 bg-emerald-500" : "border-neutral-300 dark:border-neutral-600")}>
-                    {r.done && <Check className="size-2.5 text-white" strokeWidth={4} />}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-[12px] font-semibold">{r.t}</p>
-                    <p className="text-[10px] text-neutral-400">{r.m}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="hidden w-28 shrink-0 rounded-xl border border-black/5 bg-neutral-50 p-3 md:block dark:border-white/5 dark:bg-neutral-800/60">
-              <p className="text-[10px] font-semibold text-neutral-400">Progress</p>
-              <p className="mt-1 font-heading text-lg font-bold tabular-nums">5:15 PM</p>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
-                <div className="h-full w-2/5 rounded-full bg-emerald-500" />
+          <div className="min-w-0 flex-1 p-5 pr-8 sm:pr-24">
+            <p className="font-heading text-xl font-bold">Today</p>
+            <p className="mb-3 mt-2 text-[13px] font-semibold">Today</p>
+
+            {/* row 1 — filled gray */}
+            <div className="mb-2.5 rounded-xl border border-black/10 bg-neutral-100 px-4 py-3 dark:border-white/10 dark:bg-neutral-800">
+              <div className="flex items-center gap-2.5">
+                <span className="size-4 shrink-0 rounded-full border-2 border-neutral-400" />
+                <p className="text-[13px] font-semibold">Pay electricity bill</p>
               </div>
-              <p className="mt-2 text-[10px] text-neutral-400">3 Done · 5 Left</p>
+              <p className="ml-[26px] mt-0.5 text-[11px] text-neutral-500">5:15 PM IST</p>
+            </div>
+
+            {/* row 2 — subtask progress + done badge */}
+            <div className="mb-2.5 rounded-xl border border-black/5 bg-white px-4 py-3 shadow-sm dark:border-white/5 dark:bg-neutral-900">
+              <div className="flex items-center gap-2.5">
+                <span className="grid size-4 shrink-0 place-items-center rounded bg-[#3D9E77]">
+                  <Check className="size-3 text-white" strokeWidth={4} />
+                </span>
+                <p className="text-[13px] font-semibold">Client meeting prep</p>
+              </div>
+              <div className="ml-[26px] mt-1.5 h-1.5 w-11/12 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+                <div className="h-full w-2/3 rounded-full bg-[#3D9E77]" />
+              </div>
+              <div className="ml-[26px] mt-1.5 flex items-center justify-between">
+                <p className="text-[11px] text-neutral-500">5:15 PM IST</p>
+                <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">3 Done</span>
+              </div>
+            </div>
+
+            {/* row 3 — plain white */}
+            <div className="rounded-xl border border-black/5 bg-white px-4 py-3 shadow-sm dark:border-white/5 dark:bg-neutral-900">
+              <div className="flex items-center gap-2.5">
+                <span className="size-4 shrink-0 rounded-full border-2 border-neutral-300 dark:border-neutral-600" />
+                <p className="text-[13px] font-semibold">Write launch post</p>
+              </div>
+              <p className="ml-[26px] mt-0.5 text-[11px] text-neutral-500">6:30 PM IST</p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* floating progress card over the window's right edge */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }} transition={{ duration: 0.8, ease: EASE, delay: 0.25 }}
+        className="absolute right-2 top-24 hidden w-44 rounded-xl border border-black/5 bg-white p-4 shadow-xl shadow-black/10 sm:block lg:-right-4 dark:border-white/10 dark:bg-neutral-900">
+        <p className="text-[13px] font-semibold text-neutral-500">Progress</p>
+        <p className="mt-1 font-heading text-2xl font-bold tabular-nums">5:15 PM</p>
+        <div className="mt-2.5 flex h-1.5 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+          <div className="w-3/5 bg-[#3D9E77]" />
+          <div className="w-1/5 bg-amber-400" />
+        </div>
+        <div className="mt-2 flex items-center justify-between text-[11px] font-medium text-neutral-500">
+          <span>3 Done</span><span>5 Left</span>
+        </div>
+      </motion.div>
+
       {/* floating time-debt pill */}
       <motion.div
         initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }} transition={{ duration: 0.8, ease: EASE, delay: 0.35 }}
-        className="absolute -bottom-5 right-4 flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-4 py-2 text-sm font-semibold shadow-lg shadow-black/5 sm:right-8 dark:border-red-500/30 dark:bg-neutral-900">
-        <Clock className="size-4 text-red-500" />
+        viewport={{ once: true }} transition={{ duration: 0.8, ease: EASE, delay: 0.4 }}
+        className="absolute -bottom-6 right-6 flex items-center gap-2 rounded-xl border border-black/10 bg-white px-5 py-2.5 text-base font-semibold shadow-lg shadow-black/10 sm:right-14 dark:border-white/10 dark:bg-neutral-900">
+        <Clock className="size-5 text-red-500" />
         Time Debt: <span className="text-red-500">4.5h</span>
       </motion.div>
     </div>
@@ -138,16 +188,16 @@ function Hero() {
   return (
     <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-24 pt-16 lg:grid-cols-2 lg:gap-8 lg:pt-24">
       <Reveal>
-        <h1 className="font-heading text-5xl font-bold leading-[1.04] tracking-tight sm:text-6xl lg:text-7xl">
+        <h1 className="font-heading text-[52px] font-bold leading-[1.02] tracking-tight sm:text-7xl lg:text-[88px]">
           Finally.<br />An honest<br />planner.
         </h1>
-        <p className="mt-6 max-w-md text-[17px] leading-relaxed text-neutral-600 dark:text-neutral-300">
+        <p className="mt-7 max-w-lg text-lg leading-relaxed text-neutral-700 sm:text-[19px] dark:text-neutral-300">
           TaskTeamPro doesn&rsquo;t just list your tasks; it learns your reality. Spoken capture,
           smart scheduling, and accountability insights that keep you on track.
           Plan visually. Live realistically.
         </p>
         <Link href="/signup"
-          className="mt-8 inline-flex min-h-12 items-center rounded-lg bg-emerald-600 px-7 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700">
+          className={cn("mt-9 inline-flex min-h-[52px] items-center rounded-xl px-8 text-[16px] font-semibold text-white shadow-sm transition-colors", GREEN)}>
           Start Planning for Free
         </Link>
       </Reveal>
@@ -584,7 +634,7 @@ function Footer() {
 
 export function Landing() {
   return (
-    <div className="min-h-screen overflow-x-clip bg-[#EEF1F4] text-neutral-950 dark:bg-neutral-950 dark:text-neutral-50">
+    <div className="min-h-screen overflow-x-clip bg-[#F3F5F7] text-neutral-950 dark:bg-neutral-950 dark:text-neutral-50">
       <Nav />
       <Hero />
       <Team />
