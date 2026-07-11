@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutGrid, Users, ClipboardList, ListChecks, LogOut, CheckSquare, User, Building2, Menu, X, type LucideIcon } from "lucide-react";
+import { LayoutGrid, Users, ClipboardList, ListChecks, LogOut, User, Building2, Menu, X, type LucideIcon } from "lucide-react";
+import { LogoMark } from "@/components/brand-logo";
 import { createClient } from "@/utils/supabase/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
@@ -105,11 +106,9 @@ function SidebarBody({
   return (
     <>
       <div className="flex items-center gap-2.5 px-2">
-        <div className="flex size-9 items-center justify-center rounded-xl bg-foreground text-background">
-          <CheckSquare className="size-5" />
-        </div>
+        <LogoMark className="size-9 rounded-xl shadow-sm ring-1 ring-white/10" />
         <div className="leading-tight">
-          <p className="font-heading text-base font-bold tracking-tight">TeamTaskPro</p>
+          <p className="font-heading text-base font-bold tracking-tight">TeamTask<span className="text-emerald-500">Pro</span></p>
           <span className={cn(
             "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase",
             inPersonal

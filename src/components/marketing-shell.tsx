@@ -5,14 +5,10 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/brand-logo";
 
 function Logo({ light = false }: { light?: boolean }) {
-  return (
-    <Link href="/" className="flex items-center gap-2.5">
-      <div className={cn("flex size-8 items-center justify-center rounded-lg font-heading text-sm font-bold shadow-sm", light ? "bg-white text-foreground" : "bg-foreground text-background")}>T</div>
-      <span className={cn("font-heading text-lg font-bold tracking-tight", light && "text-white")}>TeamTaskPro</span>
-    </Link>
-  );
+  return <BrandLogo light={light} />;
 }
 
 function Nav() {

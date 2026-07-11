@@ -6,9 +6,10 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Check, Clock, Repeat, Flag, Trash2, Menu, X, LogOut,
-  Sun, CalendarDays, CalendarRange, CheckSquare, User, Building2,
+  Sun, CalendarDays, CalendarRange, User, Building2,
   AlarmClock, Ban, FileText, RefreshCw, Search, ChevronDown, type LucideIcon,
 } from "lucide-react";
+import { LogoMark } from "@/components/brand-logo";
 import { createClient } from "@/utils/supabase/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AddTaskSheet } from "@/components/add-task-sheet";
@@ -927,9 +928,9 @@ function BoardSidebar({
   return (
     <>
       <div className="flex items-center gap-2.5 px-2">
-        <div className="grid size-9 place-items-center rounded-xl bg-foreground text-background"><CheckSquare className="size-5" /></div>
+        <LogoMark className="size-9 rounded-xl shadow-sm ring-1 ring-white/10" />
         <div className="leading-tight">
-          <p className="font-heading text-base font-bold tracking-tight">TeamTaskPro</p>
+          <p className="font-heading text-base font-bold tracking-tight">TeamTask<span className="text-emerald-500">Pro</span></p>
           <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">Personal</span>
         </div>
       </div>

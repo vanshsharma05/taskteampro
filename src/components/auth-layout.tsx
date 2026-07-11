@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 
 const points = [
   "Assign one-time or recurring tasks in seconds",
@@ -19,10 +19,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         <div className="pointer-events-none absolute -bottom-32 -left-16 size-80 rounded-full bg-indigo-600/10 blur-3xl" />
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }} className="relative">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-white font-heading text-base font-bold text-neutral-950 shadow-sm">T</div>
-            <span className="font-heading text-lg font-bold tracking-tight">TeamTaskPro</span>
-          </Link>
+          <BrandLogo light size="lg" />
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 200, damping: 26, delay: 0.1 }} className="relative max-w-md">
@@ -46,10 +43,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
       {/* Right — form */}
       <div className="flex w-full flex-col items-center justify-center px-6 py-12 lg:w-1/2">
         <div className="mb-8 lg:hidden">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-foreground font-heading text-base font-bold text-background shadow-sm">T</div>
-            <span className="font-heading text-lg font-bold tracking-tight text-foreground">TeamTaskPro</span>
-          </Link>
+          <BrandLogo size="lg" />
         </div>
         <div className="w-full max-w-sm">{children}</div>
       </div>
