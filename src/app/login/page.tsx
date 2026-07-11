@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { createClient } from "@/utils/supabase/client";
@@ -66,7 +67,13 @@ export default function LoginPage() {
               <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
             </motion.div>
             <motion.div variants={item} className="grid gap-1.5">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link href="/forgot-password"
+                  className="text-[13px] font-medium text-emerald-700 transition-colors hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300">
+                  Forgot password?
+                </Link>
+              </div>
               <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
             </motion.div>
 
@@ -79,7 +86,7 @@ export default function LoginPage() {
             </AnimatePresence>
 
             <motion.div variants={item} className="mt-1">
-              <Button type="submit" disabled={loading} className="w-full rounded-full bg-foreground text-background hover:bg-foreground/90">
+              <Button type="submit" disabled={loading} className="min-h-11 w-full rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
                 {loading ? "Signing in…" : "Log in"}
               </Button>
             </motion.div>

@@ -104,7 +104,7 @@ export default function SignUpPage() {
                 </AnimatePresence>
 
                 <motion.div variants={item} className="mt-1">
-                  <Button type="submit" disabled={loading} className="w-full rounded-full bg-foreground text-background hover:bg-foreground/90">
+                  <Button type="submit" disabled={loading} className="min-h-11 w-full rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
                     {loading ? "Creating account…" : "Sign up"}
                   </Button>
                 </motion.div>
