@@ -419,7 +419,7 @@ export default function TaskBoard({
 
         <div className="flex-1 overflow-y-auto px-4 pb-32 pt-5 sm:px-6 md:pb-5">
           <div className={cn("mx-auto w-full", view === "calendar" ? "max-w-5xl" : view === "today" ? "max-w-5xl" : "max-w-2xl")}>
-            <Reminders tasks={tasks} />
+            <Reminders />
             {view === "today" && (
               <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-6">
                 <div className="mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-none">

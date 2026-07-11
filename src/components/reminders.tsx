@@ -1,96 +1,52 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Bell, X } from "lucide-react";
-import { istToday, occursOn, isCheckedOn, isSnoozed, isSkippedOn, formatTime, type PersonalTask } from "@/lib/personal";
-
-function istHHMM(): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false,
-  }).formatToParts(new Date());
-  const h = parts.find((p) => p.type === "hour")?.value ?? "00";
-  const m = parts.find((p) => p.type === "minute")?.value ?? "00";
-  return `${h === "24" ? "00" : h}:${m}`;
-}
-const toMin = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
-
-function initialPermission(): NotificationPermission | "unsupported" {
-  if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
-  return Notification.permission;
-}
+import { enablePush, ensurePushRegistered, pushSupported } from "@/lib/push-client";
 
 const DISMISS_KEY = "reminders_banner_dismissed";
 
-export function Reminders({ tasks }: { tasks: PersonalTask[] }) {
-  const [perm, setPerm] = useState<NotificationPermission | "unsupported">(initialPermission);
-  // dismissing the banner should stick across visits, not reappear every reload
+/**
+ * Notification opt-in banner. Actual reminders are sent server-side via web
+ * push (they arrive even with the app closed); this component only handles
+ * getting permission and registering the device.
+ */
+export function Reminders() {
+  const [state, setState] = useState<"unknown" | "prompt" | "granted" | "denied" | "unsupported">("unknown");
   const [dismissed, setDismissed] = useState(() => {
     if (typeof window === "undefined") return false;
     try { return localStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; }
   });
-  const tasksRef = useRef(tasks);
-  const firedRef = useRef<Set<string>>(new Set());
-  const firedDayRef = useRef<string>("");
 
   useEffect(() => {
-    tasksRef.current = tasks;
-  }, [tasks]);
-
-  useEffect(() => {
-    if (perm !== "granted") return;
-    const tick = () => {
-      const today = istToday();
-      if (firedDayRef.current !== today) {
-        firedRef.current.clear();
-        firedDayRef.current = today;
-      }
-      const now = istHHMM();
-      const nowMin = toMin(now);
-
-      const fire = (t: PersonalTask, sub: string) => {
-        const key = `${t.id}:${today}:${now}`;
-        if (firedRef.current.has(key)) return;
-        firedRef.current.add(key);
-        try {
-          const n = new Notification(t.title, {
-            body: `Reminder · ${sub}${t.category ? ` · ${t.category}` : ""}`, tag: key,
-          });
-          n.onclick = () => { window.focus(); n.close(); };
-        } catch { /* ignore */ }
-      };
-
-      for (const t of tasksRef.current) {
-        if (isSnoozed(t) || isSkippedOn(t, today)) continue;   // snoozed or skipped — stay quiet
-        if (t.recurrence === "interval") {
-          if (!t.window_start || !t.window_end || !t.repeat_every_min) continue;
-          const ws = toMin(t.window_start), we = toMin(t.window_end);
-          if (nowMin < ws || nowMin > we) continue;
-          if ((nowMin - ws) % t.repeat_every_min !== 0) continue;
-          fire(t, "time for this");
-        } else {
-          if (!t.due_time) continue;
-          if (t.due_time.slice(0, 5) !== now) continue;
-          if (!occursOn(t, today)) continue;
-          if (isCheckedOn(t, today)) continue;
-          fire(t, formatTime(t.due_time));
-        }
-      }
-    };
-    tick();
-    const id = window.setInterval(tick, 20000);
-    return () => window.clearInterval(id);
-  }, [perm]);
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (!pushSupported()) { setState("unsupported"); return; }
+      const p = Notification.permission;
+      setState(p === "granted" ? "granted" : p === "denied" ? "denied" : "prompt");
+      // returning device with permission: keep its registration fresh
+      if (p === "granted") void ensurePushRegistered();
+    });
+    return () => { active = false; };
+  }, []);
 
   async function enable() {
-    if (perm === "unsupported") return;
-    const res = await Notification.requestPermission();
-    setPerm(res);
-    if (res === "granted") {
-      try { new Notification("Reminders are on", { body: "We'll nudge you when something's due." }); } catch { /* ignore */ }
+    const result = await enablePush();
+    setState(result === "granted" ? "granted" : result === "denied" ? "denied" : "prompt");
+    if (result === "granted") {
+      // the confirmation *is* the demo: show one local notification
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        void reg.showNotification("Reminders are on", {
+          body: "You'll get a nudge when a task is due — even with the app closed.",
+          icon: "/icon-192.png",
+        });
+      } catch { /* ignore */ }
     }
   }
 
-  if (perm === "granted" || perm === "unsupported" || dismissed) return null;
+  if (state === "granted" || state === "unsupported" || state === "unknown" || dismissed) return null;
 
   return (
     <div className="mb-4 flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
@@ -100,12 +56,15 @@ export function Reminders({ tasks }: { tasks: PersonalTask[] }) {
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">Turn on reminders</p>
         <p className="text-xs text-muted-foreground">
-          {perm === "denied" ? "Reminders are blocked — enable notifications for this site in your browser settings."
-            : "Get a nudge when a task is due, or on your repeating reminders."}
+          {state === "denied"
+            ? "Notifications are blocked — enable them for this site in your browser settings."
+            : "Due-time nudges and a morning brief, even when the app is closed."}
         </p>
       </div>
-      {perm === "default" && (
-        <button onClick={enable} className="shrink-0 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:bg-foreground/90">Turn on</button>
+      {state === "prompt" && (
+        <button onClick={enable} className="shrink-0 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:bg-foreground/90">
+          Turn on
+        </button>
       )}
       <button onClick={() => { setDismissed(true); try { localStorage.setItem(DISMISS_KEY, "1"); } catch { /* ignore */ } }}
         aria-label="Dismiss" className="shrink-0 rounded-md p-1 text-muted-foreground/60 transition hover:text-foreground">
