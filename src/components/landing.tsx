@@ -464,11 +464,11 @@ function ForecastCard() {
   return (
     <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-lg shadow-black/5 sm:p-6 dark:border-white/10 dark:bg-neutral-900">
       <p className="mb-4 font-heading text-base font-bold">Week Forecast</p>
-      <div className="grid grid-cols-4 gap-2 sm:grid-cols-7 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7 lg:grid-cols-4 xl:grid-cols-7">
         {FORECAST.map(({ d, s, icon: Icon, tone }) => (
           <div key={d}
             className={cn(
-              "flex min-h-[88px] cursor-default flex-col items-center justify-center gap-1 rounded-xl border p-2 text-center",
+              "flex min-h-[86px] min-w-0 cursor-default flex-col items-center justify-center gap-1.5 rounded-xl border px-1 py-2 text-center",
               "transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/10",
               tone === "storm"
                 ? "border-red-200 bg-red-50 dark:border-red-500/25 dark:bg-red-500/10"
@@ -477,15 +477,19 @@ function ForecastCard() {
                   : "border-black/5 bg-neutral-50 dark:border-white/5 dark:bg-neutral-800/60",
             )}>
             <p className="text-[12px] font-bold">{d}</p>
-            <Icon className={cn("size-4",
+            <Icon className={cn("size-4 shrink-0",
               tone === "storm" ? "text-red-500" : tone === "busy" ? "text-amber-500" : "text-neutral-400")} />
-            <p className={cn("text-[10px] font-semibold leading-tight",
+            <p className={cn("w-full text-[9px] font-semibold leading-none tracking-tight",
               tone === "storm" ? "text-red-600 dark:text-red-400" : tone === "busy" ? "text-amber-600 dark:text-amber-400" : "text-neutral-400")}>
               {s}
             </p>
           </div>
         ))}
       </div>
+      <p className="mt-5 text-[13px] leading-relaxed text-neutral-500 dark:text-neutral-400">
+        Wed &amp; Thu are heading for overload —{" "}
+        <span className="font-semibold text-red-500">move something now, not that morning.</span>
+      </p>
     </div>
   );
 }
