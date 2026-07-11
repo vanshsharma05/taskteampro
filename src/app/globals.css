@@ -147,3 +147,14 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* mobile app polish */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* keeps bottom-sheet footers clear of the gesture bar / home indicator */
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}

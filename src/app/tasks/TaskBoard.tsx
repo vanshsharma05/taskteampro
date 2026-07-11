@@ -345,8 +345,8 @@ export default function TaskBoard({
             <Search className="size-4" />
           </button>
           <button onClick={() => setAddOpen(true)} title="New task (n)"
-            className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-sm transition hover:bg-foreground/90 active:scale-[0.97]">
-            <Plus className="size-4" /> <span className="hidden sm:inline">Add task</span><span className="sm:hidden">Add</span>
+            className="hidden items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-sm transition hover:bg-foreground/90 active:scale-[0.97] md:inline-flex">
+            <Plus className="size-4" /> Add task
           </button>
         </header>
 
@@ -366,7 +366,7 @@ export default function TaskBoard({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+        <div className="flex-1 overflow-y-auto px-4 pb-32 pt-5 sm:px-6 md:pb-5">
           <div className={cn("mx-auto w-full", view === "calendar" ? "max-w-5xl" : view === "today" ? "max-w-5xl" : "max-w-2xl")}>
             <Reminders tasks={tasks} />
             {view === "today" && (
@@ -404,6 +404,37 @@ export default function TaskBoard({
         </div>
       </div>
 
+      {/* mobile: thumb-reach add button + bottom tab bar */}
+      <button onClick={() => setAddOpen(true)} aria-label="Add task"
+        className="fixed right-4 z-40 grid size-14 place-items-center rounded-full bg-foreground text-background shadow-lg transition active:scale-95 md:hidden"
+        style={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }}>
+        <Plus className="size-6" />
+      </button>
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div className="grid grid-cols-3">
+          {([
+            { v: "today" as View, icon: Sun, label: "Today", badge: todo.length + overdue.length },
+            { v: "upcoming" as View, icon: CalendarDays, label: "Upcoming", badge: 0 },
+            { v: "calendar" as View, icon: CalendarRange, label: "Calendar", badge: 0 },
+          ]).map(({ v, icon: Icon, label, badge }) => (
+            <button key={v} type="button" onClick={() => setView(v)}
+              className={cn("relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition",
+                view === v ? "text-foreground" : "text-muted-foreground")}>
+              <span className="relative">
+                <Icon className="size-5" strokeWidth={view === v ? 2.4 : 2} />
+                {badge > 0 && (
+                  <span className="absolute -right-2.5 -top-1 rounded-full bg-foreground px-1 text-[9px] font-bold leading-[14px] text-background">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </span>
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       <AddTaskSheet open={addOpen} onClose={() => { setAddOpen(false); setAddDate(null); }} userId={userId}
         knownCategories={customCategories} initialDate={addDate}
         onCreated={(t) => setTasks((prev) => [t, ...prev])} />
@@ -415,7 +446,7 @@ export default function TaskBoard({
       <AnimatePresence>
         {pendingDelete && (
           <motion.div key="undo" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}
-            className="fixed inset-x-0 bottom-5 z-[60] flex justify-center px-4">
+            className="fixed inset-x-0 bottom-24 z-[60] flex justify-center px-4 md:bottom-5">
             <div className="flex items-center gap-3 rounded-full border border-border bg-foreground py-2 pl-4 pr-2 text-sm text-background shadow-lg">
               <span className="max-w-[200px] truncate">Deleted &ldquo;{pendingDelete.task.title}&rdquo;</span>
               <button type="button" onClick={undoDelete}

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  istToday, occursOn, isSkippedOn, isSnoozed, formatTime,
+  istToday, occursOn, isSkippedOn, isSnoozed, formatTime, formatDateLabel,
   type PersonalTask,
 } from "@/lib/personal";
 
@@ -64,6 +64,7 @@ export function CalendarGrid({
   const [y0, m0] = today.split("-").map(Number);
   const [year, setYear] = useState(y0);
   const [month, setMonth] = useState(m0 - 1); // 0-based
+  const [selected, setSelected] = useState(today); // drives the mobile day agenda
 
   function shiftMonth(delta: number) {
     const d = new Date(Date.UTC(year, month + delta, 1));
@@ -142,25 +143,39 @@ export function CalendarGrid({
           const isToday = dateStr === today;
           const dayTasks = tasksOn(dateStr);
           const dayGEvents = gEventsByDate.get(dateStr) ?? [];
+          const isSelected = dateStr === selected;
           return (
-            <div key={dateStr}
-              className={cn("group relative flex min-h-[92px] flex-col p-1.5 transition hover:bg-muted/40 sm:min-h-[116px] sm:p-2",
-                isToday ? "bg-indigo-50/60 dark:bg-indigo-500/[0.06]" : "bg-card")}>
+            <div key={dateStr} onClick={() => setSelected(dateStr)}
+              className={cn("group relative flex min-h-[56px] flex-col p-1.5 transition hover:bg-muted/40 sm:min-h-[116px] sm:p-2",
+                isToday ? "bg-indigo-50/60 dark:bg-indigo-500/[0.06]" : "bg-card",
+                isSelected && "ring-1 ring-inset ring-foreground/40 sm:ring-0")}>
               <div className="mb-1 flex items-center justify-between">
                 <span className={cn("inline-flex size-6 items-center justify-center rounded-full text-xs font-bold",
                   isToday ? "bg-foreground text-background" : current ? "text-foreground" : "text-muted-foreground/40")}>
                   {dayNum}
                 </span>
-                <button type="button" onClick={() => onCreateOnDate(dateStr)} aria-label={`Add task on ${dateStr}`}
-                  className="grid size-5 place-items-center rounded-md bg-muted text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100">
+                <button type="button" onClick={(e) => { e.stopPropagation(); onCreateOnDate(dateStr); }} aria-label={`Add task on ${dateStr}`}
+                  className="hidden size-5 place-items-center rounded-md bg-muted text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 sm:grid">
                   <Plus className="size-3" />
                 </button>
               </div>
-              <div className="flex-1 space-y-1 overflow-y-auto">
+
+              {/* phones: status dots — pills are unreadable at this size */}
+              <div className="flex flex-wrap gap-0.5 sm:hidden">
+                {dayTasks.slice(0, 6).map((t) => (
+                  <span key={t.id} className={cn("size-1.5 rounded-full", DOT[statusOn(t, dateStr, today)])} />
+                ))}
+                {dayGEvents.slice(0, Math.max(0, 6 - dayTasks.length)).map((e) => (
+                  <span key={e.id} className="size-1.5 rounded-full border border-muted-foreground/60" />
+                ))}
+              </div>
+
+              {/* larger screens: full pills */}
+              <div className="hidden flex-1 space-y-1 overflow-y-auto sm:block">
                 {dayTasks.map((t) => {
                   const s = statusOn(t, dateStr, today);
                   return (
-                    <button key={t.id} type="button" onClick={() => onOpenTask(t)}
+                    <button key={t.id} type="button" onClick={(e) => { e.stopPropagation(); onOpenTask(t); }}
                       className={cn("flex w-full flex-col rounded-lg border p-1 px-1.5 text-left text-[10px] font-semibold transition", PILL[s])}
                       title={`${t.title}${t.due_time ? ` · ${formatTime(t.due_time)}` : ""}`}>
                       <span className="truncate leading-tight">{t.title}</span>
@@ -185,8 +200,50 @@ export function CalendarGrid({
         })}
       </div>
 
+      {/* phones: agenda for the tapped day */}
+      <div className="border-t border-border p-3 sm:hidden">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="font-heading text-sm font-bold">{formatDateLabel(selected, today)}</h3>
+          <button type="button" onClick={() => onCreateOnDate(selected)}
+            className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground">
+            <Plus className="size-3" /> Add task
+          </button>
+        </div>
+        {(() => {
+          const dayTasks = tasksOn(selected);
+          const dayGEvents = gEventsByDate.get(selected) ?? [];
+          if (dayTasks.length + dayGEvents.length === 0) {
+            return <p className="py-2 text-sm text-muted-foreground">Nothing on this day.</p>;
+          }
+          return (
+            <div className="space-y-1.5">
+              {dayTasks.map((t) => {
+                const s = statusOn(t, selected, today);
+                return (
+                  <button key={t.id} type="button" onClick={() => onOpenTask(t)}
+                    className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left">
+                    <span className={cn("size-2 shrink-0 rounded-full", DOT[s])} />
+                    <span className={cn("min-w-0 flex-1 truncate text-sm font-medium", s === "done" && "text-muted-foreground line-through")}>{t.title}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {t.due_time ? formatTime(t.due_time) : t.recurrence ? "Repeats" : ""}
+                    </span>
+                  </button>
+                );
+              })}
+              {dayGEvents.map((e) => (
+                <div key={e.id} className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-border bg-card/50 px-3 py-2.5">
+                  <span className="size-2 shrink-0 rounded-full border border-muted-foreground/60" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">{e.title}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{e.time ?? "All day"}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+
       {/* legend */}
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 border-t border-border px-4 py-3 text-xs font-medium text-muted-foreground">
+      <div className="hidden flex-wrap items-center justify-center gap-x-4 gap-y-1.5 border-t border-border px-4 py-3 text-xs font-medium text-muted-foreground sm:flex">
         {LEGEND.map(({ status, label }) => (
           <span key={status} className="flex items-center gap-1.5">
             <span className={cn("size-2 rounded-full", DOT[status])} /> {label}

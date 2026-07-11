@@ -360,7 +360,7 @@ function AddTaskForm({
         {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">{error}</p>}
       </div>
 
-      <div className="border-t border-border px-5 py-4">
+      <div className="pb-safe border-t border-border px-5 pt-4">
         <button type="button" onClick={handleSave} disabled={!canSave}
           className="w-full rounded-full bg-foreground py-2.5 text-sm font-semibold text-background transition hover:bg-foreground/90 disabled:opacity-40">
           {saving ? "Adding…" : "Add task"}

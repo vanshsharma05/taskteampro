@@ -389,7 +389,7 @@ function DetailBody({
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-border px-5 py-3">
+      <div className="pb-safe flex items-center justify-between border-t border-border px-5 pt-3">
         <button type="button" onClick={() => { onDelete(task); onClose(); }}
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
           <Trash2 className="size-3.5" /> Delete task
