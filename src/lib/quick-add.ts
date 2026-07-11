@@ -16,6 +16,7 @@ export interface ParsedTask {
   window_end: string | null;
   importance: "normal" | "high";
   category: string | null;
+  estimate_min: number | null;
 }
 
 const WEEKDAYS: Record<string, number> = {
@@ -89,7 +90,7 @@ export function parseQuickAdd(input: string, knownCategories: string[] = [], tod
     title: "", due_date: today, due_time: null,
     recurrence: null, repeat_days: null, repeat_dom: null,
     repeat_every_min: null, window_start: null, window_end: null,
-    importance: "normal", category: null,
+    importance: "normal", category: null, estimate_min: null,
   };
 
   const eat = (re: RegExp, onMatch: (m: RegExpMatchArray) => void): boolean => {
@@ -228,6 +229,14 @@ export function parseQuickAdd(input: string, knownCategories: string[] = [], tod
       out.due_time = `${h === "24" ? "00" : h}:${mm}`;
     });
   }
+
+  // ---- effort estimate: "for 30 min", "takes an hour", "should take 2 hrs" ----
+  eat(new RegExp(`\\b(?:for|takes?|should take|will take)\\s+(?:about\\s+|around\\s+|~)?(?:(half)\\s+(?:an\\s+)?|(an?)\\s+|(${NUM_RE})\\s*)(hours?|hrs?|minutes?|mins?)\\b`, "i"), (m) => {
+    const unitIsHour = /h/i.test(m[4]);
+    const n = m[1] ? 0.5 : m[2] ? 1 : toNum(m[3]);
+    const mins = Math.round(unitIsHour ? n * 60 : n);
+    if (mins >= 5 && mins <= 480) out.estimate_min = mins;
+  });
 
   // ---- priority ----
   eat(/\b(?:high priority|urgent|important|asap)\b|!!/i, () => { out.importance = "high"; });

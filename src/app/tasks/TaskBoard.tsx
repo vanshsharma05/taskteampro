@@ -19,6 +19,12 @@ import { CalendarGrid } from "@/components/calendar-grid";
 import { Reminders } from "@/components/reminders";
 import { useGoogleCalendar } from "@/components/use-google-calendar";
 import { deleteGoogleEvent } from "@/lib/google-calendar";
+import { WeekForecast } from "@/components/week-forecast";
+import { BankruptcySheet, type BankruptcyDecision } from "@/components/bankruptcy-sheet";
+import {
+  estimationBias, timeDebt, weekForecast, staleTasks, formatMin,
+  type BiasReport,
+} from "@/lib/time-honesty";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_CATEGORIES, categoryIcon, istToday, occursOn, isCheckedOn,
@@ -71,6 +77,9 @@ function normalize(t: Incoming): PersonalTask {
     skipped_on: t.skipped_on ?? null,
     subtasks: t.subtasks ?? [],
     google_event_id: t.google_event_id ?? null,
+    estimate_min: t.estimate_min ?? null,
+    actual_min: t.actual_min ?? null,
+    reschedule_count: t.reschedule_count ?? 0,
   };
 }
 
@@ -197,6 +206,22 @@ export default function TaskBoard({
   })();
   const repeating = tasks.filter(inCat).filter((t) => !!t.recurrence);
 
+  // ask how long a completed task actually took — feeds the bias coefficient
+  const [pendingActual, setPendingActual] = useState<PersonalTask | null>(null);
+  const actualTimer = useRef<number | null>(null);
+
+  function promptActual(task: PersonalTask) {
+    if (actualTimer.current) window.clearTimeout(actualTimer.current);
+    setPendingActual(task);
+    actualTimer.current = window.setTimeout(() => setPendingActual(null), 8000);
+  }
+
+  async function recordActual(task: PersonalTask, minutes: number) {
+    setPendingActual(null);
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, actual_min: minutes } : t)));
+    await createClient().from("tasks").update({ actual_min: minutes }).eq("id", task.id);
+  }
+
   async function toggleTask(task: PersonalTask) {
     const checked = isCheckedOn(task, today);
     if (task.recurrence) {
@@ -210,6 +235,7 @@ export default function TaskBoard({
         snoozed_until: null, skipped_on: null,
       };
       setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...updates } : t)));
+      if (done && task.estimate_min && task.actual_min == null) promptActual(task);
       await createClient().from("tasks").update({ ...updates, status: done ? "done" : "pending" }).eq("id", task.id);
     }
   }
@@ -280,6 +306,30 @@ export default function TaskBoard({
 
   const doneCount = doneToday.length;
   const totalToday = todo.length + doneCount;
+
+  // the honesty layer
+  const bias = estimationBias(tasks);
+  const debt = timeDebt(tasks, today, bias);
+  const stale = staleTasks(tasks, today);
+  const forecast = weekForecast(tasks, googleEvents, today, bias);
+  const [bankruptcyOpen, setBankruptcyOpen] = useState(false);
+
+  async function applyBankruptcy(decisions: Map<string, BankruptcyDecision>) {
+    const toToday: string[] = [], toSomeday: string[] = [], toDelete: string[] = [];
+    for (const [id, d] of decisions) {
+      if (d === "today") toToday.push(id);
+      else if (d === "someday") toSomeday.push(id);
+      else toDelete.push(id);
+    }
+    setTasks((prev) => prev
+      .filter((t) => !toDelete.includes(t.id))
+      .map((t) => toToday.includes(t.id) ? { ...t, due_date: today, skipped_on: null }
+        : toSomeday.includes(t.id) ? { ...t, due_date: null, skipped_on: null } : t));
+    const supabase = createClient();
+    if (toToday.length) await supabase.from("tasks").update({ due_date: today, skipped_on: null }).in("id", toToday);
+    if (toSomeday.length) await supabase.from("tasks").update({ due_date: null, skipped_on: null }).in("id", toSomeday);
+    if (toDelete.length) await supabase.from("tasks").delete().in("id", toDelete);
+  }
 
   const sidebar = (onNavigate?: () => void) => (
     <BoardSidebar
@@ -374,6 +424,18 @@ export default function TaskBoard({
                 <div className="mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-none">
                   <QuickAdd userId={userId} knownCategories={customCategories}
                     onCreated={(t) => setTasks((prev) => [t, ...prev])} />
+                  {stale.length >= 5 && (
+                    <div className="mb-5 flex items-center gap-3 rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">{stale.length} tasks keep slipping</p>
+                        <p className="text-xs text-muted-foreground">A 5-minute cleanup beats a backlog you avoid looking at.</p>
+                      </div>
+                      <button type="button" onClick={() => setBankruptcyOpen(true)}
+                        className="shrink-0 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:bg-foreground/90">
+                        Clean up
+                      </button>
+                    </div>
+                  )}
                   <DailyDigest pending={todo} doneCount={doneToday.length} overdueCount={overdue.length} />
                   <TodayView overdue={overdue} todo={todo} snoozed={snoozed} skipped={skippedToday} doneToday={doneToday}
                     today={today} onToggle={toggleTask} onDelete={deleteTask} onOpen={(t) => setDetailId(t.id)}
@@ -382,14 +444,18 @@ export default function TaskBoard({
                 </div>
                 <aside className="mx-auto mt-7 w-full max-w-2xl space-y-4 lg:mx-0 lg:mt-0 lg:max-w-none">
                   <StatsCard tasks={tasks} today={today}
-                    leftToday={todo.length + overdue.length} doneToday={doneToday.length} />
+                    leftToday={todo.length + overdue.length} doneToday={doneToday.length}
+                    bias={bias} debtMin={debt.totalMin} />
                   <GoogleToday gcal={gcal} events={googleEvents} today={today} />
                 </aside>
               </div>
             )}
             {view === "upcoming" && (
-              <UpcomingView byDate={upcomingByDate} repeating={repeating}
-                today={today} onToggle={toggleTask} onDelete={deleteTask} onOpen={(t) => setDetailId(t.id)} />
+              <>
+                <WeekForecast days={forecast} today={today} />
+                <UpcomingView byDate={upcomingByDate} repeating={repeating}
+                  today={today} onToggle={toggleTask} onDelete={deleteTask} onOpen={(t) => setDetailId(t.id)} />
+              </>
             )}
             {view === "calendar" && (
               <div className="space-y-4">
@@ -439,11 +505,36 @@ export default function TaskBoard({
         knownCategories={customCategories} initialDate={addDate}
         onCreated={(t) => setTasks((prev) => [t, ...prev])} />
 
-      <TaskDetailSheet task={detailTask} userId={userId} onClose={() => setDetailId(null)}
+      <TaskDetailSheet task={detailTask} userId={userId} bias={bias} onClose={() => setDetailId(null)}
         onUpdated={updateTask} onDelete={deleteTask}
         onDuplicated={(t) => setTasks((prev) => [t, ...prev])} />
 
+      <BankruptcySheet open={bankruptcyOpen} tasks={stale}
+        onClose={() => setBankruptcyOpen(false)} onApply={applyBankruptcy} />
+
       <AnimatePresence>
+        {pendingActual && !pendingDelete && (
+          <motion.div key="actual" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}
+            className="fixed inset-x-0 bottom-24 z-[60] flex justify-center px-4 md:bottom-5">
+            <div className="flex items-center gap-2 rounded-full border border-border bg-foreground py-2 pl-4 pr-2 text-sm text-background shadow-lg">
+              <span className="whitespace-nowrap">Took how long?</span>
+              {[
+                { label: `~${formatMin(Math.max(5, Math.round(pendingActual.estimate_min! / 2)))}`, min: Math.max(5, Math.round(pendingActual.estimate_min! / 2)) },
+                { label: `${formatMin(pendingActual.estimate_min!)} ✓`, min: pendingActual.estimate_min! },
+                { label: `~${formatMin(pendingActual.estimate_min! * 2)}`, min: pendingActual.estimate_min! * 2 },
+              ].map(({ label, min }) => (
+                <button key={label} type="button" onClick={() => recordActual(pendingActual, min)}
+                  className="rounded-full bg-background/15 px-2.5 py-1 text-xs font-bold transition hover:bg-background/25">
+                  {label}
+                </button>
+              ))}
+              <button type="button" onClick={() => setPendingActual(null)} aria-label="Dismiss"
+                className="rounded-full p-1 text-background/60 transition hover:text-background">
+                <X className="size-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
         {pendingDelete && (
           <motion.div key="undo" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}
             className="fixed inset-x-0 bottom-24 z-[60] flex justify-center px-4 md:bottom-5">
@@ -517,8 +608,9 @@ function SectionAction({ label, confirmLabel, onAct }: {
   );
 }
 
-function StatsCard({ tasks, today, leftToday, doneToday }: {
+function StatsCard({ tasks, today, leftToday, doneToday, bias, debtMin }: {
   tasks: PersonalTask[]; today: string; leftToday: number; doneToday: number;
+  bias: BiasReport; debtMin: number;
 }) {
   const weekAgo = addDays(today, -6);
   const doneThisWeek = tasks.filter((t) =>
@@ -544,6 +636,36 @@ function StatsCard({ tasks, today, leftToday, doneToday }: {
             <p className="mt-1 text-[11px] font-medium text-muted-foreground">{label}</p>
           </div>
         ))}
+      </div>
+
+      {/* the honesty rows */}
+      <div className="mt-4 space-y-1.5 border-t border-border pt-3 text-[13px]">
+        {debtMin > 0 && (
+          <p className="flex items-baseline justify-between">
+            <span className="text-muted-foreground">Time debt</span>
+            <span className="font-semibold tabular-nums text-red-600 dark:text-red-400">{formatMin(debtMin)}</span>
+          </p>
+        )}
+        {bias.overall !== null ? (
+          <>
+            <p className="flex items-baseline justify-between">
+              <span className="text-muted-foreground">Your estimates run</span>
+              <span className={cn("font-semibold tabular-nums",
+                bias.overall > 1.15 ? "text-amber-600 dark:text-amber-400" : bias.overall < 0.85 ? "text-indigo-600 dark:text-indigo-400" : "text-emerald-600 dark:text-emerald-400")}>
+                ×{bias.overall.toFixed(1)} {bias.overall > 1.15 ? "low" : bias.overall < 0.85 ? "high" : "honest"}
+              </span>
+            </p>
+            {bias.byCategory[0] && Math.abs(bias.byCategory[0].ratio - 1) > 0.3 && (
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                Biggest blind spot: {bias.byCategory[0].category} takes you ×{bias.byCategory[0].ratio.toFixed(1)} your estimate.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Add time estimates and log actuals when you finish — after a few, the app learns your personal bias.
+          </p>
+        )}
       </div>
     </div>
   );

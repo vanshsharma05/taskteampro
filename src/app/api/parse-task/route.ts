@@ -32,7 +32,8 @@ Respond with ONLY a JSON object, no other text, in exactly this shape:
   "repeat_dom": number | null,         // day of month 1-31, only for monthly
   "repeat_every_min": number | null,   // minutes between reminders 15-240, only for interval
   "importance": "normal" | "high",
-  "category": string | null            // one of the known categories, or null
+  "category": string | null,           // one of the known categories, or null
+  "estimate_min": number | null        // stated effort ("for 30 min", "takes an hour"), else null
 }
 
 Rules:
@@ -74,6 +75,8 @@ function sanitize(raw: any, categories: string[]) {
     window_end: recurrence === "interval" ? "21:00" : null,
     importance: raw.importance === "high" ? "high" : "normal",
     category,
+    estimate_min: Number.isInteger(raw.estimate_min) && raw.estimate_min >= 5 && raw.estimate_min <= 480
+      ? raw.estimate_min : null,
   };
 }
 

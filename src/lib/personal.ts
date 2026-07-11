@@ -27,6 +27,9 @@ export interface PersonalTask {
   skipped_on: string | null;      // one-off: any value = skipped; recurring: skips that day
   subtasks: SubTask[] | null;
   google_event_id: string | null; // Google Calendar event we pushed for this task
+  estimate_min: number | null;    // how long you think it will take
+  actual_min: number | null;      // how long it actually took (asked at completion)
+  reschedule_count: number;       // times the due date got pushed
 }
 
 export interface CategoryDef { name: string; Icon: LucideIcon; }

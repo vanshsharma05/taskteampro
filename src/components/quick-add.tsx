@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, Plus, CalendarDays, Clock, Repeat, Flag, Tag, CornerDownLeft } from "lucide-react";
+import { Mic, Plus, CalendarDays, Clock, Repeat, Flag, Tag, CornerDownLeft, Hourglass } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { cn } from "@/lib/utils";
 import { parseQuickAdd, type ParsedTask } from "@/lib/quick-add";
@@ -123,6 +123,7 @@ export function QuickAdd({ userId, knownCategories, onCreated }: {
       repeat_every_min: final.recurrence === "interval" ? final.repeat_every_min : null,
       window_start: final.recurrence === "interval" ? final.window_start : null,
       window_end: final.recurrence === "interval" ? final.window_end : null,
+      estimate_min: final.estimate_min ?? null,
     };
 
     const supabase = createClient();
@@ -151,6 +152,7 @@ export function QuickAdd({ userId, knownCategories, onCreated }: {
       is_done: data.is_done, last_done_on: data.last_done_on, completed_at: data.completed_at,
       snoozed_until: null, skipped_on: null, subtasks: data.subtasks ?? [],
       google_event_id: googleEventId,
+      estimate_min: data.estimate_min ?? null, actual_min: null, reschedule_count: 0,
     });
     setText("");
     setSaving(false);
@@ -207,6 +209,11 @@ export function QuickAdd({ userId, knownCategories, onCreated }: {
           )}
           {parsed.category && (
             <span className="inline-flex items-center gap-1"><Tag className="size-3" />{parsed.category}</span>
+          )}
+          {parsed.estimate_min && (
+            <span className="inline-flex items-center gap-1"><Hourglass className="size-3" />
+              {parsed.estimate_min < 60 ? `${parsed.estimate_min}m` : `${parsed.estimate_min / 60}h`}
+            </span>
           )}
         </div>
       )}

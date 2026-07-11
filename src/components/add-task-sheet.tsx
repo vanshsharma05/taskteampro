@@ -93,6 +93,7 @@ function AddTaskForm({
   const [winEnd, setWinEnd] = useState("18:00");
 
   const [importance, setImportance] = useState<"normal" | "high">("normal");
+  const [estimate, setEstimate] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,6 +138,7 @@ function AddTaskForm({
       repeat_every_min: repeat === "interval" ? everyMin : null,
       window_start: repeat === "interval" ? winStart : null,
       window_end: repeat === "interval" ? winEnd : null,
+      estimate_min: estimate,
     };
 
     const supabase = createClient();
@@ -163,6 +165,7 @@ function AddTaskForm({
       is_done: data.is_done, last_done_on: data.last_done_on, completed_at: data.completed_at,
       snoozed_until: data.snoozed_until ?? null, skipped_on: data.skipped_on ?? null, subtasks: data.subtasks ?? [],
       google_event_id: googleEventId,
+      estimate_min: data.estimate_min ?? null, actual_min: null, reschedule_count: 0,
     });
     onClose();
   }
@@ -336,6 +339,20 @@ function AddTaskForm({
               {showTime && <div className="px-2 pb-2"><TimePicker value={dueTime} onChange={setDueTime} /></div>}
             </div>
           )}
+        </div>
+
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">How long will it take?</p>
+          <div className="flex flex-wrap gap-1.5">
+            {[{ v: 5, l: "5m" }, { v: 15, l: "15m" }, { v: 30, l: "30m" }, { v: 60, l: "1h" }, { v: 120, l: "2h" }].map(({ v, l }) => (
+              <button key={v} type="button" onClick={() => setEstimate((p) => (p === v ? null : v))}
+                className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                  estimate === v ? "border-foreground bg-foreground text-background"
+                    : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground")}>
+                {l}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="mt-5 flex flex-wrap gap-1.5">

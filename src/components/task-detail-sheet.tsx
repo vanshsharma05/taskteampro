@@ -1,6 +1,6 @@
 "use client";
 
-import { createElement, useEffect, useState } from "react";
+import { createElement, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Clock, Repeat, Flag, Trash2, CalendarDays, Plus, Copy,
@@ -11,10 +11,11 @@ import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/date-picker";
 import { TimePicker } from "@/components/time-picker";
 import {
-  DEFAULT_CATEGORIES, categoryIcon, istToday, isCheckedOn, isSnoozed, isSkippedOn, addDays,
+  DEFAULT_CATEGORIES, categoryIcon, istToday, isCheckedOn, isSnoozed, isSkippedOn, isOverdue, addDays,
   formatTime, formatDateLabel, describeRepeat, formatSnoozeUntil,
   type PersonalTask, type SubTask,
 } from "@/lib/personal";
+import { realisticMinutes, formatMin, type BiasReport } from "@/lib/time-honesty";
 
 const SNOOZE_OPTIONS = [
   { label: "30 min", minutes: 30 },
@@ -34,10 +35,11 @@ function snoozeTarget(minutes: number): string {
 }
 
 export function TaskDetailSheet({
-  task, userId, onClose, onUpdated, onDelete, onDuplicated,
+  task, userId, bias, onClose, onUpdated, onDelete, onDuplicated,
 }: {
   task: PersonalTask | null;
   userId: string;
+  bias: BiasReport;
   onClose: () => void;
   onUpdated: (t: PersonalTask) => void;
   onDelete: (t: PersonalTask) => void;
@@ -65,7 +67,7 @@ export function TaskDetailSheet({
             initial={{ y: 40, opacity: 0.6 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}>
             {/* keyed on task id so switching tasks resets local state */}
-            <DetailBody key={task.id} task={task} userId={userId} onClose={onClose} onUpdated={onUpdated} onDelete={onDelete} onDuplicated={onDuplicated} />
+            <DetailBody key={task.id} task={task} userId={userId} bias={bias} onClose={onClose} onUpdated={onUpdated} onDelete={onDelete} onDuplicated={onDuplicated} />
           </motion.div>
         </motion.div>
       )}
@@ -74,10 +76,11 @@ export function TaskDetailSheet({
 }
 
 function DetailBody({
-  task, userId, onClose, onUpdated, onDelete, onDuplicated,
+  task, userId, bias, onClose, onUpdated, onDelete, onDuplicated,
 }: {
   task: PersonalTask;
   userId: string;
+  bias: BiasReport;
   onClose: () => void;
   onUpdated: (t: PersonalTask) => void;
   onDelete: (t: PersonalTask) => void;
@@ -92,6 +95,9 @@ function DetailBody({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const subRef = useRef<HTMLInputElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
 
   const checked = isCheckedOn(task, today);
   const snoozed = isSnoozed(task);
@@ -120,6 +126,15 @@ function DetailBody({
 
   function toggleSkip() {
     patch({ skipped_on: skipped ? null : today, snoozed_until: null });
+  }
+
+  // moving a date LATER counts as a slip; pulling it earlier doesn't
+  function reschedule(d: string | null) {
+    const pushedLater = !!d && !!(task.due_date ?? today) && d > (task.due_date ?? today);
+    patch({
+      due_date: d, skipped_on: null,
+      ...(pushedLater ? { reschedule_count: (task.reschedule_count ?? 0) + 1 } : {}),
+    });
   }
 
   function saveSubtasks(next: SubTask[]) {
@@ -175,7 +190,7 @@ function DetailBody({
     <>
       <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0 flex-1">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Task title"
+          <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Task title"
             onBlur={() => {
               const v = title.trim();
               if (v && v !== task.title) patch({ title: v });
@@ -270,7 +285,7 @@ function DetailBody({
                 { label: "Next week", date: addDays(today, 7) },
               ].map(({ label, date }) => (
                 <button key={label} type="button"
-                  onClick={() => { setShowDatePicker(false); patch({ due_date: date, skipped_on: null }); }}
+                  onClick={() => { setShowDatePicker(false); reschedule(date); }}
                   className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition",
                     task.due_date === date ? "border-foreground bg-foreground text-background"
                       : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground")}>
@@ -288,7 +303,7 @@ function DetailBody({
             {showDatePicker && (
               <div className="mt-2 rounded-2xl border border-border">
                 <DatePicker value={task.due_date}
-                  onChange={(d) => { setShowDatePicker(false); patch({ due_date: d, skipped_on: null }); }} />
+                  onChange={(d) => { setShowDatePicker(false); reschedule(d); }} />
               </div>
             )}
           </div>
@@ -316,6 +331,66 @@ function DetailBody({
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* procrastination diagnosis — shows only when a task keeps slipping */}
+        {!checked && !task.recurrence && (task.reschedule_count >= 3 || (isOverdue(task, today) && task.reschedule_count >= 1)) && (
+          <div className="mt-6 rounded-2xl border border-amber-300/60 bg-amber-50 p-3.5 dark:border-amber-500/30 dark:bg-amber-500/10">
+            <p className="text-sm font-medium">
+              This one keeps slipping{task.reschedule_count > 0 && <> — pushed {task.reschedule_count}×</>}. What&rsquo;s really going on?
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              <button type="button" onClick={() => { titleRef.current?.focus(); titleRef.current?.select(); }}
+                className="rounded-xl border border-border bg-background px-2.5 py-2 text-left text-xs font-medium transition hover:border-foreground/30">
+                Too vague<span className="block text-[10px] font-normal text-muted-foreground">Rewrite it as one concrete action</span>
+              </button>
+              <button type="button" onClick={() => subRef.current?.focus()}
+                className="rounded-xl border border-border bg-background px-2.5 py-2 text-left text-xs font-medium transition hover:border-foreground/30">
+                Too big<span className="block text-[10px] font-normal text-muted-foreground">Break off the first small piece</span>
+              </button>
+              <button type="button" onClick={() => {
+                patch({ skipped_on: today });
+                setNotes((n) => (n.startsWith("Waiting on") ? n : `Waiting on: \n${n}`));
+                requestAnimationFrame(() => notesRef.current?.focus());
+              }}
+                className="rounded-xl border border-border bg-background px-2.5 py-2 text-left text-xs font-medium transition hover:border-foreground/30">
+                Waiting on someone<span className="block text-[10px] font-normal text-muted-foreground">Note who — it stops nagging you</span>
+              </button>
+              <button type="button" onClick={() => {
+                const t = task.title.startsWith("Start: ") ? task.title : `Start: ${task.title}`;
+                setTitle(t);
+                patch({ title: t, estimate_min: 10, due_date: today });
+              }}
+                className="rounded-xl border border-border bg-background px-2.5 py-2 text-left text-xs font-medium transition hover:border-foreground/30">
+                I dread it<span className="block text-[10px] font-normal text-muted-foreground">Shrink to a 10-minute version, today</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* effort estimate + your learned bias */}
+        {!task.recurrence && !checked && (
+          <div className="mt-6">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">How long will it take?</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[{ v: 5, l: "5m" }, { v: 15, l: "15m" }, { v: 30, l: "30m" }, { v: 60, l: "1h" }, { v: 120, l: "2h" }].map(({ v, l }) => (
+                <button key={v} type="button" onClick={() => patch({ estimate_min: task.estimate_min === v ? null : v })}
+                  className={cn("rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                    task.estimate_min === v ? "border-foreground bg-foreground text-background"
+                      : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground")}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {task.estimate_min != null && (bias.overall !== null || bias.byCategory.length > 0) && (() => {
+              const real = realisticMinutes(task, bias);
+              return Math.abs(real - task.estimate_min) >= 5 ? (
+                <p className="mt-2 text-[12px] text-muted-foreground">
+                  Based on your track record, this realistically takes <span className="font-semibold text-foreground">~{formatMin(real)}</span>.
+                </p>
+              ) : null;
+            })()}
           </div>
         )}
 
@@ -367,7 +442,7 @@ function DetailBody({
             </div>
           )}
           <div className="flex gap-1.5">
-            <input value={newSub} onChange={(e) => setNewSub(e.target.value)}
+            <input ref={subRef} value={newSub} onChange={(e) => setNewSub(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") addSubtask(); }}
               placeholder="Break it down…"
               className="h-9 min-w-0 flex-1 rounded-[8px] border border-input bg-transparent px-3 text-sm outline-none transition focus:border-foreground/30 placeholder:text-muted-foreground/60" />
@@ -381,7 +456,7 @@ function DetailBody({
         {/* notes */}
         <div className="mt-6">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</p>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+          <textarea ref={notesRef} value={notes} onChange={(e) => setNotes(e.target.value)}
             onBlur={() => { if ((task.description ?? "") !== notes) patch({ description: notes.trim() || null }); }}
             placeholder="Add details, links, or anything to remember…" rows={4}
             className="w-full resize-none rounded-xl border border-border bg-transparent px-3 py-2 text-sm outline-none transition focus:border-foreground/30 placeholder:text-muted-foreground/60" />
