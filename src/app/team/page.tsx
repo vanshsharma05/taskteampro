@@ -11,9 +11,11 @@ export default async function TeamPage() {
     .from("companies").select("id, name, join_code").eq("admin_id", user.id).maybeSingle();
   if (!company) redirect("/onboarding");
 
-  const { data: members } = await supabase
-    .from("profiles").select("id, email, role, created_at")
-    .eq("company_id", company.id).order("created_at", { ascending: true });
+  const [{ data: members }, { data: tasks }] = await Promise.all([
+    supabase.from("profiles").select("id, email, role, created_at")
+      .eq("company_id", company.id).order("created_at", { ascending: true }),
+    supabase.from("tasks").select("*").eq("company_id", company.id),
+  ]);
 
   return (
     <TeamView
@@ -22,6 +24,7 @@ export default async function TeamPage() {
       joinCode={company.join_code ?? ""}
       adminId={user.id}
       members={members ?? []}
+      tasks={tasks ?? []}
     />
   );
 }

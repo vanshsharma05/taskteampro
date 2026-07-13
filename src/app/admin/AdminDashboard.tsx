@@ -10,16 +10,20 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { createClient } from "@/utils/supabase/client";
 import { scoreTasks, taskStatus, isDoneNow, formatDue, type ScoringTask } from "@/lib/scoring";
+import { EASE, JADE_BTN, CountUp, Ring, LoadBar, Reveal, scoreTone } from "@/components/work-kit";
 import { cn } from "@/lib/utils";
 
-const EASE = [0.22, 1, 0.36, 1] as const;
-const JADE = "bg-[#3D9E77] hover:bg-[#348A67] text-white";
+const JADE = JADE_BTN;
 
 type Member = { id: string; email: string | null };
 
 function initials(email: string | null) { return (email ?? "?").slice(0, 2).toUpperCase(); }
 function istToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+}
+function greeting() {
+  const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", hour12: false }).format(new Date()));
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
 /* ------------------------------- component ------------------------------- */
@@ -100,33 +104,47 @@ export default function AdminDashboard({
           <Plus className="size-4" /> Assign work
         </Link>
       ) : undefined}>
-      <div className="mx-auto w-full max-w-5xl space-y-6 pb-16">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }}>
-          <p className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">{companyName}</p>
-          <h2 className="mt-1 font-heading text-3xl font-bold tracking-tight">Command center</h2>
+      <div className="mx-auto w-full max-w-5xl space-y-5 pb-20">
+        {/* gradient header band */}
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }}
+          className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[#3D9E77] to-[#2E7D5E] px-6 py-6 text-white">
+          <div className="pointer-events-none absolute -right-8 -top-10 size-40 rounded-full bg-white/10 blur-2xl" />
+          <p className="relative text-[12px] font-semibold uppercase tracking-wider text-white/70">{companyName}</p>
+          <h2 className="relative mt-1 font-heading text-2xl font-bold tracking-tight sm:text-3xl">{greeting()} — here&rsquo;s your team</h2>
+          {!noMembers && (
+            <p className="relative mt-1 text-[13px] text-white/80">
+              {activeWork} active {activeWork === 1 ? "task" : "tasks"}
+              {overdueNow > 0 && <> · <span className="font-semibold text-white">{overdueNow} overdue</span></>}
+              {avgScore !== null && <> · {avgScore}% on-time average</>}
+            </p>
+          )}
         </motion.div>
 
         {noMembers ? <EmptyTeam /> : (
           <>
-            {overdueNow > 0 && (
-              <Reveal>
-                <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-500/25 dark:bg-red-500/10">
-                  <AlertTriangle className="size-5 shrink-0 text-red-500" />
-                  <p className="flex-1 text-sm font-medium">
-                    {overdueNow} {overdueNow === 1 ? "task is" : "tasks are"} overdue across your team.
-                  </p>
-                  <a href="#team" className="text-sm font-semibold text-red-600 dark:text-red-400">Review</a>
-                </div>
-              </Reveal>
-            )}
+            <AnimatePresence>
+              {overdueNow > 0 && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.4, ease: EASE }}>
+                  <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-500/25 dark:bg-red-500/10">
+                    <motion.span animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}>
+                      <AlertTriangle className="size-5 shrink-0 text-red-500" />
+                    </motion.span>
+                    <p className="flex-1 text-sm font-medium">
+                      {overdueNow} {overdueNow === 1 ? "task is" : "tasks are"} overdue across your team.
+                    </p>
+                    <a href="#team" className="text-sm font-semibold text-red-600 dark:text-red-400">Review</a>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* KPIs */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <Kpi icon={Users} label="Team" value={members.length} delay={0} />
-              <Kpi icon={Briefcase} label="Active work" value={activeWork} delay={0.05} />
-              <Kpi icon={Clock} label="On my plate" value={myPlate.length} delay={0.1} tone={myPlate.length > 0 ? "jade" : "muted"} />
-              <Kpi icon={AlertTriangle} label="Overdue" value={overdueNow} delay={0.15} tone={overdueNow > 0 ? "red" : "muted"} />
-              <Kpi icon={TrendingUp} label="On-time avg" value={avgScore === null ? "—" : `${avgScore}%`} delay={0.2} tone={avgScore !== null && avgScore >= 90 ? "jade" : "muted"} />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Kpi icon={Briefcase} label="Active work" value={activeWork} i={0} />
+              <Kpi icon={Clock} label="On my plate" value={myPlate.length} i={1} tone={myPlate.length > 0 ? "jade" : "muted"} />
+              <Kpi icon={AlertTriangle} label="Overdue" value={overdueNow} i={2} tone={overdueNow > 0 ? "red" : "muted"} />
+              <Kpi icon={TrendingUp} label="On-time avg" value={avgScore} i={3} suffix="%" tone={avgScore !== null && avgScore >= 90 ? "jade" : "muted"} />
             </div>
 
             <MyPlate
@@ -297,26 +315,35 @@ function Team({ rows, avgScore, tasks, now, onPullBack }: {
           )}
         </div>
         <ul className="divide-y divide-border">
-          {rows.map(({ member, s, open, overloaded }) => {
+          {rows.map(({ member, s, open, overloaded }, idx) => {
             const expanded = openId === member.id;
             const theirOpen = tasks.filter((t) => t.user_id === member.id && !isDoneNow(t, now));
+            const maxLoad = Math.max(6, ...rows.map((r) => r.open));
             return (
-              <li key={member.id}>
+              <motion.li key={member.id}
+                initial={{ opacity: 0, x: -8 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
+                transition={{ duration: 0.4, ease: EASE, delay: idx * 0.05 }}>
                 <button onClick={() => setOpenId(expanded ? null : member.id)}
-                  className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition hover:bg-muted/40">
+                  className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-muted/40">
                   <span className={cn("grid size-10 shrink-0 place-items-center rounded-full text-xs font-semibold",
                     overloaded ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-accent text-accent-foreground")}>
                     {initials(member.email)}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{member.email ?? "Unknown"}</span>
-                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted-foreground">
-                      <span>{open} open</span>
-                      {s.overdue > 0 && <><span>·</span><span className="font-semibold text-red-600 dark:text-red-400">{s.overdue} overdue</span></>}
+                    <span className="mt-1 flex items-center gap-2">
+                      <span className="hidden w-24 sm:block"><LoadBar value={open} max={maxLoad} tone={overloaded ? "#EF4444" : "#3D9E77"} /></span>
+                      <span className="text-[12px] text-muted-foreground">
+                        {open} open
+                        {s.overdue > 0 && <span className="font-semibold text-red-600 dark:text-red-400"> · {s.overdue} overdue</span>}
+                      </span>
                       {overloaded && <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600 dark:bg-red-500/15 dark:text-red-400">Overloaded</span>}
                     </span>
                   </span>
-                  <Reliability score={s.score} />
+                  <span className="hidden text-right sm:block">
+                    <span className={cn("block font-heading text-[11px] font-semibold uppercase tracking-wider", scoreTone(s.score).text)}>{scoreTone(s.score).label}</span>
+                  </span>
+                  <Ring score={s.score} size={44} />
                   <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-90")} />
                 </button>
 
@@ -351,7 +378,7 @@ function Team({ rows, avgScore, tasks, now, onPullBack }: {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </li>
+              </motion.li>
             );
           })}
         </ul>
@@ -360,42 +387,27 @@ function Team({ rows, avgScore, tasks, now, onPullBack }: {
   );
 }
 
-function Reliability({ score }: { score: number | null }) {
-  const tone = score === null ? "muted" : score >= 90 ? "jade" : score >= 70 ? "amber" : "red";
-  const text = tone === "jade" ? "text-[#3D9E77]" : tone === "amber" ? "text-amber-600 dark:text-amber-400" : tone === "red" ? "text-red-600 dark:text-red-400" : "text-muted-foreground";
-  return (
-    <span className="hidden w-16 shrink-0 text-right sm:block">
-      <span className={cn("font-heading text-xl font-bold tabular-nums", text)}>{score === null ? "—" : `${score}%`}</span>
-      <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">on-time</span>
-    </span>
-  );
-}
-
 /* -------------------------------- pieces --------------------------------- */
 
-function Reveal({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.7, ease: EASE }}>
-      {children}
-    </motion.div>
-  );
-}
-
-function Kpi({ icon: Icon, label, value, delay, tone = "muted" }: {
-  icon: typeof Users; label: string; value: number | string; delay: number;
+function Kpi({ icon: Icon, label, value, i, suffix = "", tone = "muted" }: {
+  icon: typeof Users; label: string; value: number | null; i: number; suffix?: string;
   tone?: "muted" | "jade" | "red";
 }) {
   const valueText = tone === "jade" ? "text-[#3D9E77]" : tone === "red" ? "text-red-600 dark:text-red-500" : "text-foreground";
   const iconWrap = tone === "jade" ? "bg-[#3D9E77]/10 text-[#3D9E77]" : tone === "red" ? "bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400" : "bg-muted text-muted-foreground";
+  const accent = tone === "jade" ? "bg-[#3D9E77]" : tone === "red" ? "bg-red-500" : "bg-transparent";
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE, delay }}
-      className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4">
+    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE, delay: i * 0.06 }}
+      whileHover={{ y: -3 }}
+      className="relative flex flex-col gap-2 overflow-hidden rounded-2xl border border-border bg-card p-4 transition-shadow hover:shadow-lg hover:shadow-black/5">
+      <span className={cn("absolute inset-x-0 top-0 h-0.5", accent)} />
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
         <span className={cn("grid size-8 place-items-center rounded-lg", iconWrap)}><Icon className="size-4" /></span>
       </div>
-      <span className={cn("font-heading text-3xl font-bold tabular-nums", valueText)}>{value}</span>
+      <span className={cn("font-heading text-3xl font-bold tabular-nums", valueText)}>
+        {value === null ? "—" : <CountUp value={value} suffix={suffix} />}
+      </span>
     </motion.div>
   );
 }
