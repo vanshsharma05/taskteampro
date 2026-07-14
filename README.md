@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TeamTaskPro v1 &nbsp;·&nbsp; _legacy_
 
-## Getting Started
+> **This is version 1.** A new, complete version is being built separately. This
+> codebase is the stable v1 that currently powers the live site — keep it running,
+> but new feature work belongs in v2.
+>
+> - **Live:** https://www.taskteampro.com (brand shown to users: **TaskTeamPro**)
+> - **Package:** `teamtaskpro-v1` · **Status:** maintenance only
 
-First, run the development server:
+An honest task planner — capture a task in one sentence (typed or spoken), and the
+app schedules it, syncs it with Google Calendar, and holds you accountable
+(estimation-bias learning, time debt, week-overload forecast, slip diagnosis,
+backlog cleanup). Plus a Work mode where an owner delegates tasks to a team and
+tracks on-time reliability.
+
+## Stack
+
+- **Framework:** Next.js (App Router) — a modified build; read `node_modules/next/dist/docs/` before framework changes (see `AGENTS.md`)
+- **UI:** Tailwind v4, framer-motion, lucide-react
+- **Backend:** Supabase (Postgres + auth), migrations in `supabase/migrations/`
+- **AI parsing:** Llama 3.1/3.3 via Groq (`/api/parse-task`), on-device fallback
+- **Notifications:** web push (`/api/push/*`, pg_cron every minute)
+- **Deploy:** Vercel on push to `main` (repo: `vanshsharma05/taskteampro`)
+
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Requires `.env.local` — Supabase keys, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`,
+`GROQ_API_KEY`, VAPID push keys, `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Docs
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `docs/design-brief.md` — function-only product brief
+- `docs/work-mode-context.md` — Work-mode context for a fresh session
+- `AGENTS.md` / `CLAUDE.md` — project instructions
 
-## Learn More
+## Schema note
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The live `tasks` table has drifted ahead of the numbered migrations — columns are
+added via the Supabase SQL editor first, then documented as a migration file.
+Always run new SQL in Supabase **before** deploying code that reads new columns.
